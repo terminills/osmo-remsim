@@ -410,7 +410,14 @@ static void handle_options(int argc, char **argv)
 			g_bankd->cfg.ki_proxy.enabled = true;
 			break;
 		case 'K':
-			g_bankd->cfg.ki_proxy.proxy_slot = atoi(optarg);
+			{
+				int slot = atoi(optarg);
+				if (slot < 0 || slot > 1023) {
+					fprintf(stderr, "Error: KI Proxy slot must be 0-1023\n");
+					exit(2);
+				}
+				g_bankd->cfg.ki_proxy.proxy_slot = slot;
+			}
 			break;
 		case 'C':
 			g_bankd->cfg.ki_proxy.carrier = atoi(optarg);
@@ -817,6 +824,19 @@ static int worker_handle_ki_proxy(struct bankd_worker *worker, const uint8_t *ap
 	struct bank_slot proxy_slot = { .bank_id = worker->slot.bank_id, .slot_nr = g_bankd->cfg.ki_proxy.proxy_slot };
 	int rc;
 
+	/* Validate input parameters */
+	if (!apdu_buf || apdu_len == 0 || !resp_buf || !resp_len) {
+		LOGW(worker, "KI Proxy: Invalid parameters\n");
+		return -1;
+	}
+
+	/* Validate proxy slot configuration */
+	if (g_bankd->cfg.ki_proxy.proxy_slot >= g_bankd->srvc.bankd.num_slots) {
+		LOGW(worker, "KI Proxy: Invalid proxy slot %u (max: %u)\n", 
+		     g_bankd->cfg.ki_proxy.proxy_slot, g_bankd->srvc.bankd.num_slots - 1);
+		return -1;
+	}
+
 	LOGW(worker, "KI Proxy: Routing RUN GSM ALGORITHM to proxy slot %u\n", 
 	     g_bankd->cfg.ki_proxy.proxy_slot);
 
@@ -832,14 +852,20 @@ static int worker_handle_ki_proxy(struct bankd_worker *worker, const uint8_t *ap
 	pthread_mutex_unlock(&g_bankd->workers_mutex);
 
 	if (!proxy_worker) {
-		LOGW(worker, "KI Proxy: proxy slot %u not available\n", proxy_slot.slot_nr);
+		LOGW(worker, "KI Proxy: proxy slot %u not available or not mapped\n", proxy_slot.slot_nr);
+		return -1;
+	}
+
+	/* Avoid self-routing to prevent infinite loops */
+	if (proxy_worker == worker) {
+		LOGW(worker, "KI Proxy: Cannot route to self (slot %u)\n", worker->slot.slot_nr);
 		return -1;
 	}
 
 	/* Perform transceive on proxy slot */
 	rc = proxy_worker->ops->transceive(proxy_worker, apdu_buf, apdu_len, resp_buf, resp_len);
 	if (rc < 0) {
-		LOGW(worker, "KI Proxy: transceive failed on proxy slot\n");
+		LOGW(worker, "KI Proxy: transceive failed on proxy slot %u\n", proxy_slot.slot_nr);
 		return rc;
 	}
 
@@ -882,8 +908,8 @@ static int worker_handle_tpduModemToCard(struct bankd_worker *worker, const Rspr
 	}
 
 	/* Check for KI Proxy interception - RUN GSM ALGORITHM (0x88) */
-	if (g_bankd->cfg.ki_proxy.enabled && mdm2sim->data.size > 0 && 
-	    mdm2sim->data.buf[0] == 0x88) {
+	if (g_bankd->cfg.ki_proxy.enabled && mdm2sim->data.size > 1 && 
+	    mdm2sim->data.buf[1] == 0x88) {
 		rc = worker_handle_ki_proxy(worker, mdm2sim->data.buf, mdm2sim->data.size,
 					    rx_buf, &rx_buf_len);
 	} else {
