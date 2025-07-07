@@ -104,6 +104,12 @@ static void bankd_init(struct bankd *bankd)
 	bankd->cfg.permit_shared_pcsc = false;
 	bankd->cfg.gsmtap_host = NULL;
 	bankd->cfg.gsmtap_slot = -1;
+	/* Initialize KI Proxy configuration */
+	bankd->cfg.ki_proxy.enabled = false;
+	bankd->cfg.ki_proxy.proxy_slot = 0;
+	bankd->cfg.ki_proxy.carrier = 0;
+	bankd->cfg.ki_proxy.imsi = NULL;
+	bankd->cfg.ki_proxy.iccid = NULL;
 }
 
 /* create + start a new bankd_worker thread */
@@ -302,6 +308,11 @@ static void printf_help(FILE *out)
 "  -s --permit-shared-pcsc      Permit SHARED access to PC/SC readers (default: exclusive)\n"
 "  -g --gsmtap-ip A.B.C.D       Enable GSMTAP and send APDU traces to given IP\n"
 "  -G --gsmtap-slot <0-1023>    Limit tracing to given bank slot, only (default: all slots)\n"
+"  -k --ki-proxy-enable         Enable KI Proxy Mode\n"
+"  -K --ki-proxy-slot <0-1023>  KI Proxy slot number\n"
+"  -C --ki-proxy-carrier <num>  KI Proxy carrier number\n"
+"  -M --ki-proxy-imsi <imsi>    KI Proxy IMSI\n"
+"  -c --ki-proxy-iccid <iccid>  KI Proxy ICCID\n"
 "  -L --disable-color           Disable colors for logging to stderr\n"
 "  -T --timestamp               Prefix every log line with a timestamp\n"
 "  -e --log-level number        Set a global loglevel.\n"
@@ -332,10 +343,15 @@ static void handle_options(int argc, char **argv)
 			{ "disable-color", 0, 0, 'L' },
 			{ "timestamp", 0, 0, 'T' },
 			{ "log-level", 1, 0, 'e' },
+			{ "ki-proxy-enable", 0, 0, 'k' },
+			{ "ki-proxy-slot", 1, 0, 'K' },
+			{ "ki-proxy-carrier", 1, 0, 'C' },
+			{ "ki-proxy-imsi", 1, 0, 'M' },
+			{ "ki-proxy-iccid", 1, 0, 'c' },
 			{ 0, 0, 0, 0 }
 		};
 
-		c = getopt_long(argc, argv, "hVd:i:p:b:n:N:I:P:sg:G:LTe:", long_options, &option_index);
+		c = getopt_long(argc, argv, "hVd:i:p:b:n:N:I:P:sg:G:LTe:kK:C:M:c:", long_options, &option_index);
 		if (c == -1)
 			break;
 
@@ -389,6 +405,28 @@ static void handle_options(int argc, char **argv)
 			break;
 		case 'e':
 			log_set_log_level(osmo_stderr_target, atoi(optarg));
+			break;
+		case 'k':
+			g_bankd->cfg.ki_proxy.enabled = true;
+			break;
+		case 'K':
+			{
+				int slot = atoi(optarg);
+				if (slot < 0 || slot > 1023) {
+					fprintf(stderr, "Error: KI Proxy slot must be 0-1023\n");
+					exit(2);
+				}
+				g_bankd->cfg.ki_proxy.proxy_slot = slot;
+			}
+			break;
+		case 'C':
+			g_bankd->cfg.ki_proxy.carrier = atoi(optarg);
+			break;
+		case 'M':
+			g_bankd->cfg.ki_proxy.imsi = optarg;
+			break;
+		case 'c':
+			g_bankd->cfg.ki_proxy.iccid = optarg;
 			break;
 		}
 	}
@@ -777,6 +815,66 @@ respond_and_err:
 	return rc;
 }
 
+/* Handle KI Proxy routing for RUN GSM ALGORITHM (0x88) APDU */
+static int worker_handle_ki_proxy(struct bankd_worker *worker, const uint8_t *apdu_buf, 
+				  size_t apdu_len, uint8_t *resp_buf, DWORD *resp_len)
+{
+	struct bankd_worker *proxy_worker = NULL;
+	struct bankd_worker *w;
+	struct bank_slot proxy_slot = { .bank_id = worker->slot.bank_id, .slot_nr = g_bankd->cfg.ki_proxy.proxy_slot };
+	int rc;
+
+	/* Validate input parameters */
+	if (!apdu_buf || apdu_len == 0 || !resp_buf || !resp_len) {
+		LOGW(worker, "KI Proxy: Invalid parameters\n");
+		return -1;
+	}
+
+	/* Validate proxy slot configuration */
+	if (g_bankd->cfg.ki_proxy.proxy_slot >= g_bankd->srvc.bankd.num_slots) {
+		LOGW(worker, "KI Proxy: Invalid proxy slot %u (max: %u)\n", 
+		     g_bankd->cfg.ki_proxy.proxy_slot, g_bankd->srvc.bankd.num_slots - 1);
+		return -1;
+	}
+
+	LOGW(worker, "KI Proxy: Routing RUN GSM ALGORITHM to proxy slot %u\n", 
+	     g_bankd->cfg.ki_proxy.proxy_slot);
+
+	/* Find the worker for the proxy slot */
+	pthread_mutex_lock(&g_bankd->workers_mutex);
+	llist_for_each_entry(w, &g_bankd->workers, list) {
+		if (bank_slot_equals(&w->slot, &proxy_slot) && 
+		    w->state == BW_ST_CONN_CLIENT_MAPPED_CARD) {
+			proxy_worker = w;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&g_bankd->workers_mutex);
+
+	if (!proxy_worker) {
+		LOGW(worker, "KI Proxy: proxy slot %u not available or not mapped\n", proxy_slot.slot_nr);
+		return -1;
+	}
+
+	/* Avoid self-routing to prevent infinite loops */
+	if (proxy_worker == worker) {
+		LOGW(worker, "KI Proxy: Cannot route to self (slot %u)\n", worker->slot.slot_nr);
+		return -1;
+	}
+
+	/* Perform transceive on proxy slot */
+	rc = proxy_worker->ops->transceive(proxy_worker, apdu_buf, apdu_len, resp_buf, resp_len);
+	if (rc < 0) {
+		LOGW(worker, "KI Proxy: transceive failed on proxy slot %u\n", proxy_slot.slot_nr);
+		return rc;
+	}
+
+	LOGW(worker, "KI Proxy: Response from proxy slot %u: %s\n", 
+	     proxy_slot.slot_nr, osmo_hexdump_nospc(resp_buf, *resp_len));
+
+	return rc;
+}
+
 static int worker_handle_tpduModemToCard(struct bankd_worker *worker, const RsproPDU_t *pdu)
 {
 	const struct TpduModemToCard *mdm2sim = &pdu->msg.choice.tpduModemToCard;
@@ -809,8 +907,15 @@ static int worker_handle_tpduModemToCard(struct bankd_worker *worker, const Rspr
 		return -106;
 	}
 
-	rc = worker->ops->transceive(worker, mdm2sim->data.buf, mdm2sim->data.size,
-				     rx_buf, &rx_buf_len);
+	/* Check for KI Proxy interception - RUN GSM ALGORITHM (0x88) */
+	if (g_bankd->cfg.ki_proxy.enabled && mdm2sim->data.size > 1 && 
+	    mdm2sim->data.buf[1] == 0x88) {
+		rc = worker_handle_ki_proxy(worker, mdm2sim->data.buf, mdm2sim->data.size,
+					    rx_buf, &rx_buf_len);
+	} else {
+		rc = worker->ops->transceive(worker, mdm2sim->data.buf, mdm2sim->data.size,
+					     rx_buf, &rx_buf_len);
+	}
 	if (rc < 0)
 		return rc;
 

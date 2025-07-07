@@ -141,6 +141,14 @@ struct bankd {
 		bool permit_shared_pcsc;
 		char *gsmtap_host;
 		int gsmtap_slot;
+		/* KI Proxy configuration */
+		struct {
+			bool enabled;
+			unsigned int proxy_slot;
+			unsigned int carrier;
+			char *imsi;
+			char *iccid;
+		} ki_proxy;
 	} cfg;
 };
 
