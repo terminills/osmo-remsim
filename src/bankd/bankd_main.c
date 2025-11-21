@@ -316,7 +316,7 @@ static void printf_help(FILE *out)
 "  -k --ki-proxy-enable         Enable KI Proxy Mode\n"
 "  -K --ki-proxy-slot <0-1023>  KI Proxy physical slot (single slot legacy mode)\n"
 "  -S --ki-proxy-slots <s1,s2,...> KI Proxy physical slot pool for round-robin (e.g., 1-50)\n"
-"  -V --ki-proxy-virtual <start-end> Virtual slot range that uses KI proxy (e.g., 900-999)\n"
+"  -v --ki-proxy-virtual <start-end> Virtual slot range that uses KI proxy (e.g., 900-999)\n"
 "  -C --ki-proxy-carrier <num>  KI Proxy carrier number\n"
 "  -M --ki-proxy-imsi <imsi>    KI Proxy IMSI\n"
 "  -c --ki-proxy-iccid <iccid>  KI Proxy ICCID\n"
@@ -353,14 +353,14 @@ static void handle_options(int argc, char **argv)
 			{ "ki-proxy-enable", 0, 0, 'k' },
 			{ "ki-proxy-slot", 1, 0, 'K' },
 			{ "ki-proxy-slots", 1, 0, 'S' },
-			{ "ki-proxy-virtual", 1, 0, 'V' },
+			{ "ki-proxy-virtual", 1, 0, 'v' },
 			{ "ki-proxy-carrier", 1, 0, 'C' },
 			{ "ki-proxy-imsi", 1, 0, 'M' },
 			{ "ki-proxy-iccid", 1, 0, 'c' },
 			{ 0, 0, 0, 0 }
 		};
 
-		c = getopt_long(argc, argv, "hVd:i:p:b:n:N:I:P:sg:G:LTe:kK:S:V:C:M:c:", long_options, &option_index);
+		c = getopt_long(argc, argv, "hVd:i:p:b:n:N:I:P:sg:G:LTe:kK:S:v:C:M:c:", long_options, &option_index);
 		if (c == -1)
 			break;
 
@@ -478,7 +478,7 @@ static void handle_options(int argc, char **argv)
 				talloc_free(slots_str);
 			}
 			break;
-		case 'V':
+		case 'v':
 			{
 				/* Parse virtual slot range: "900-999" */
 				char *dash = strchr(optarg, '-');
