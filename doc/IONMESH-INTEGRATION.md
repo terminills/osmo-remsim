@@ -515,18 +515,36 @@ curl -X POST http://ionmesh.example.com:5000/api/backend/v1/remsim/heartbeat \
 | Webhook Support | 💡 Optional | LOW |
 | Advanced Policies | 💡 Optional | LOW |
 
+## Implementation Guide
+
+> **📘 Complete Implementation Details**: See [IONMESH-ENHANCEMENTS.md](./IONMESH-ENHANCEMENTS.md) for:
+> - Complete API endpoint implementations with code examples
+> - Database schema additions and migration scripts
+> - Client management dashboard specifications
+> - Prometheus metrics exporter
+> - Security considerations and testing strategies
+> - Phase-by-phase implementation timeline
+
 ## Next Steps
 
 1. **Implement Required Endpoints** in IonMesh (register, heartbeat, unregister)
+   - See detailed implementation in [IONMESH-ENHANCEMENTS.md](./IONMESH-ENHANCEMENTS.md)
+   - Includes complete Python code for Flask endpoints
+   - Database migration scripts provided
 2. **Test Integration** with real OpenWRT hardware
 3. **Add Dashboard UI** for client management
+   - Complete HTML/JavaScript templates provided
+   - Real-time status monitoring
 4. **Security Hardening** (API keys, TLS, tenant isolation)
+   - Authentication decorators included
+   - TLS configuration examples
 5. **Performance Testing** at scale (100+ clients)
 6. **Documentation** for deployment and operations
 
 ## References
 
 - [IonMesh Fork Repository](https://github.com/terminills/ionmesh-fork)
+- [IonMesh Enhancement Guide](./IONMESH-ENHANCEMENTS.md) ⭐ **NEW**
 - [osmo-remsim Documentation](https://osmocom.org/projects/osmo-remsim/wiki)
 - [OpenWRT Integration Guide](OPENWRT-INTEGRATION.md)
 - [RSPRO Protocol Specification](https://osmocom.org/projects/osmo-remsim)
