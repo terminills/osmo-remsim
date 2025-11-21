@@ -8,7 +8,7 @@ The easiest way to build osmo-remsim is using the provided `build.sh` script:
 
 ```bash
 # Clone the repository
-git clone https://github.com/terminills/osmo-remsim.git
+git clone https://gitea.osmocom.org/sim-card/osmo-remsim
 cd osmo-remsim
 
 # Build everything (requires sudo for dependency installation)

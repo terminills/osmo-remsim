@@ -19,7 +19,7 @@ echo ""
 
 read -p "Continue? (y/N) " -n 1 -r
 echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+if [[ ! $REPLY =~ "^[Yy]$" ]]; then
     echo "Aborted."
     exit 0
 fi
