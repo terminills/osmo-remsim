@@ -36,6 +36,7 @@
 
 #include "client.h"
 #include "debug.h"
+#include "ionmesh_integration.h"
 
 /* OpenWRT GPIO control paths */
 #define GPIO_EXPORT_PATH "/sys/class/gpio/export"
@@ -48,17 +49,43 @@
 #define DEFAULT_SIM_SWITCH_GPIO 20
 #define DEFAULT_MODEM_RESET_GPIO 21
 
+/* Dual-modem configuration defaults */
+#define DEFAULT_MODEM1_SIM_SWITCH_GPIO 20
+#define DEFAULT_MODEM1_RESET_GPIO 21
+#define DEFAULT_MODEM2_SIM_SWITCH_GPIO 22
+#define DEFAULT_MODEM2_RESET_GPIO 23
+
+/* Modem configuration for dual-modem setups */
+struct modem_config {
+	int sim_switch_gpio;
+	int reset_gpio;
+	char *device_path;
+	bool is_primary;  /* true = remsim modem, false = always-on IoT modem */
+};
+
 /* OpenWRT-specific state */
 struct openwrt_state {
 	struct bankd_client *bc;
+	
+	/* Legacy single modem support */
 	int sim_switch_gpio;
 	int modem_reset_gpio;
 	char *modem_device;
 	bool gpio_initialized;
 	
+	/* Dual-modem configuration */
+	bool dual_modem_mode;
+	struct modem_config modem1;  /* Primary remsim modem */
+	struct modem_config modem2;  /* Always-on IoT modem for connectivity */
+	
 	/* ATR buffer for SIM card */
 	uint8_t atr_buf[ATR_SIZE_MAX];
 	uint8_t atr_len;
+	
+	/* IonMesh orchestration */
+	struct ionmesh_config *ionmesh_cfg;
+	struct ionmesh_assignment ionmesh_assignment;
+	bool use_ionmesh;
 };
 
 static struct openwrt_state *g_openwrt_state = NULL;
@@ -324,19 +351,58 @@ static int openwrt_init_modem(struct openwrt_state *os)
 {
 	LOGP(DMAIN, LOGL_INFO, "Initializing OpenWRT modem interface\n");
 
-	if (!os->modem_device) {
-		/* Try to auto-detect modem device */
-		if (access("/dev/ttyUSB2", F_OK) == 0) {
-			os->modem_device = talloc_strdup(os, "/dev/ttyUSB2");
-		} else if (access("/dev/cdc-wdm0", F_OK) == 0) {
-			os->modem_device = talloc_strdup(os, "/dev/cdc-wdm0");
-		} else {
-			LOGP(DMAIN, LOGL_NOTICE, "No modem device auto-detected\n");
+	if (os->dual_modem_mode) {
+		LOGP(DMAIN, LOGL_INFO, "Dual-modem mode enabled\n");
+		
+		/* Initialize modem 1 (primary remsim modem) */
+		if (!os->modem1.device_path) {
+			if (access("/dev/ttyUSB2", F_OK) == 0) {
+				os->modem1.device_path = talloc_strdup(os, "/dev/ttyUSB2");
+			} else if (access("/dev/cdc-wdm0", F_OK) == 0) {
+				os->modem1.device_path = talloc_strdup(os, "/dev/cdc-wdm0");
+			}
 		}
-	}
+		
+		/* Initialize modem 2 (always-on IoT modem) */
+		if (!os->modem2.device_path) {
+			if (access("/dev/ttyUSB5", F_OK) == 0) {
+				os->modem2.device_path = talloc_strdup(os, "/dev/ttyUSB5");
+			} else if (access("/dev/cdc-wdm1", F_OK) == 0) {
+				os->modem2.device_path = talloc_strdup(os, "/dev/cdc-wdm1");
+			}
+		}
+		
+		LOGP(DMAIN, LOGL_INFO, "Modem 1 (remsim): %s (GPIO SIM:%d RST:%d)\n",
+		     os->modem1.device_path ? os->modem1.device_path : "not detected",
+		     os->modem1.sim_switch_gpio, os->modem1.reset_gpio);
+		LOGP(DMAIN, LOGL_INFO, "Modem 2 (IoT/heartbeat): %s (GPIO SIM:%d RST:%d)\n",
+		     os->modem2.device_path ? os->modem2.device_path : "not detected",
+		     os->modem2.sim_switch_gpio, os->modem2.reset_gpio);
+		
+		/* Ensure IoT modem is using local SIM for connectivity */
+		if (os->modem2.sim_switch_gpio > 0) {
+			gpio_export(os->modem2.sim_switch_gpio);
+			gpio_set_direction(os->modem2.sim_switch_gpio, "out");
+			gpio_set_value(os->modem2.sim_switch_gpio, 0);  /* 0 = local IoT SIM */
+			LOGP(DMAIN, LOGL_INFO, "IoT modem set to use local SIM for always-on connectivity\n");
+		}
+		
+	} else {
+		/* Single modem mode */
+		if (!os->modem_device) {
+			/* Try to auto-detect modem device */
+			if (access("/dev/ttyUSB2", F_OK) == 0) {
+				os->modem_device = talloc_strdup(os, "/dev/ttyUSB2");
+			} else if (access("/dev/cdc-wdm0", F_OK) == 0) {
+				os->modem_device = talloc_strdup(os, "/dev/cdc-wdm0");
+			} else {
+				LOGP(DMAIN, LOGL_NOTICE, "No modem device auto-detected\n");
+			}
+		}
 
-	if (os->modem_device) {
-		LOGP(DMAIN, LOGL_INFO, "Using modem device: %s\n", os->modem_device);
+		if (os->modem_device) {
+			LOGP(DMAIN, LOGL_INFO, "Using modem device: %s\n", os->modem_device);
+		}
 	}
 
 	return 0;
@@ -362,27 +428,151 @@ int client_user_main(struct bankd_client *g_client)
 	g_client->data = os;
 	g_openwrt_state = os;
 
-	/* Initialize GPIO pins from config or use defaults */
-	if (g_client->cfg->usb.vendor_id > 0) {
-		/* If USB vendor_id is set, use it as GPIO pin for SIM switch */
-		os->sim_switch_gpio = g_client->cfg->usb.vendor_id;
+	/* Check for dual-modem mode via environment variable */
+	char *dual_modem = getenv("OPENWRT_DUAL_MODEM");
+	if (dual_modem && strcmp(dual_modem, "1") == 0) {
+		os->dual_modem_mode = true;
+		
+		/* Configure modem 1 (primary remsim modem) */
+		os->modem1.is_primary = true;
+		char *m1_sim_gpio = getenv("MODEM1_SIM_GPIO");
+		os->modem1.sim_switch_gpio = m1_sim_gpio ? atoi(m1_sim_gpio) : DEFAULT_MODEM1_SIM_SWITCH_GPIO;
+		char *m1_rst_gpio = getenv("MODEM1_RESET_GPIO");
+		os->modem1.reset_gpio = m1_rst_gpio ? atoi(m1_rst_gpio) : DEFAULT_MODEM1_RESET_GPIO;
+		char *m1_dev = getenv("MODEM1_DEVICE");
+		if (m1_dev) {
+			os->modem1.device_path = talloc_strdup(os, m1_dev);
+		}
+		
+		/* Configure modem 2 (always-on IoT modem) */
+		os->modem2.is_primary = false;
+		char *m2_sim_gpio = getenv("MODEM2_SIM_GPIO");
+		os->modem2.sim_switch_gpio = m2_sim_gpio ? atoi(m2_sim_gpio) : DEFAULT_MODEM2_SIM_SWITCH_GPIO;
+		char *m2_rst_gpio = getenv("MODEM2_RESET_GPIO");
+		os->modem2.reset_gpio = m2_rst_gpio ? atoi(m2_rst_gpio) : DEFAULT_MODEM2_RESET_GPIO;
+		char *m2_dev = getenv("MODEM2_DEVICE");
+		if (m2_dev) {
+			os->modem2.device_path = talloc_strdup(os, m2_dev);
+		}
+		
+		LOGP(DMAIN, LOGL_INFO, "Dual-modem configuration detected\n");
+		LOGP(DMAIN, LOGL_INFO, "  Modem 1 (remsim): GPIO SIM=%d RST=%d DEV=%s\n",
+		     os->modem1.sim_switch_gpio, os->modem1.reset_gpio,
+		     os->modem1.device_path ? os->modem1.device_path : "auto");
+		LOGP(DMAIN, LOGL_INFO, "  Modem 2 (IoT): GPIO SIM=%d RST=%d DEV=%s\n",
+		     os->modem2.sim_switch_gpio, os->modem2.reset_gpio,
+		     os->modem2.device_path ? os->modem2.device_path : "auto");
+		
+		/* Copy modem1 settings to legacy variables for compatibility */
+		os->sim_switch_gpio = os->modem1.sim_switch_gpio;
+		os->modem_reset_gpio = os->modem1.reset_gpio;
+		if (os->modem1.device_path) {
+			os->modem_device = os->modem1.device_path;
+		}
+		
 	} else {
-		os->sim_switch_gpio = DEFAULT_SIM_SWITCH_GPIO;
-	}
+		/* Single modem mode (legacy) */
+		os->dual_modem_mode = false;
+		
+		/* Initialize GPIO pins from config or use defaults */
+		if (g_client->cfg->usb.vendor_id > 0) {
+			/* If USB vendor_id is set, use it as GPIO pin for SIM switch */
+			os->sim_switch_gpio = g_client->cfg->usb.vendor_id;
+		} else {
+			os->sim_switch_gpio = DEFAULT_SIM_SWITCH_GPIO;
+		}
 
-	if (g_client->cfg->usb.product_id > 0) {
-		/* If USB product_id is set, use it as GPIO pin for modem reset */
-		os->modem_reset_gpio = g_client->cfg->usb.product_id;
-	} else {
-		os->modem_reset_gpio = DEFAULT_MODEM_RESET_GPIO;
-	}
+		if (g_client->cfg->usb.product_id > 0) {
+			/* If USB product_id is set, use it as GPIO pin for modem reset */
+			os->modem_reset_gpio = g_client->cfg->usb.product_id;
+		} else {
+			os->modem_reset_gpio = DEFAULT_MODEM_RESET_GPIO;
+		}
 
-	/* Use USB path as modem device if specified */
-	if (g_client->cfg->usb.path) {
-		os->modem_device = talloc_strdup(os, g_client->cfg->usb.path);
+		/* Use USB path as modem device if specified */
+		if (g_client->cfg->usb.path) {
+			os->modem_device = talloc_strdup(os, g_client->cfg->usb.path);
+		}
 	}
 
 	openwrt_init_modem(os);
+
+	/* Check if IonMesh orchestration is enabled */
+	if (g_client->cfg->event_script && strstr(g_client->cfg->event_script, "ionmesh")) {
+		os->use_ionmesh = true;
+		
+		/* Initialize IonMesh configuration */
+		os->ionmesh_cfg = ionmesh_config_init(os);
+		if (!os->ionmesh_cfg) {
+			LOGP(DMAIN, LOGL_ERROR, "Failed to initialize IonMesh config\n");
+			return -ENOMEM;
+		}
+		
+		/* Configure IonMesh from environment or defaults */
+		char *ionmesh_host = getenv("IONMESH_HOST");
+		if (ionmesh_host) {
+			talloc_free(os->ionmesh_cfg->host);
+			os->ionmesh_cfg->host = talloc_strdup(os->ionmesh_cfg, ionmesh_host);
+		}
+		
+		char *ionmesh_port = getenv("IONMESH_PORT");
+		if (ionmesh_port) {
+			os->ionmesh_cfg->port = atoi(ionmesh_port);
+		}
+		
+		char *ionmesh_tenant = getenv("IONMESH_TENANT_ID");
+		if (ionmesh_tenant) {
+			os->ionmesh_cfg->tenant_id = atoi(ionmesh_tenant);
+		}
+		
+		/* Generate client ID from hostname and slot */
+		char hostname[256];
+		gethostname(hostname, sizeof(hostname));
+		os->ionmesh_cfg->client_id = talloc_asprintf(os->ionmesh_cfg, "%s-slot%d",
+							     hostname, g_client->cfg->client_slot);
+		
+		/* Set mapping mode from config or default to ONE_TO_ONE_SWSIM */
+		char *mapping_mode = getenv("IONMESH_MAPPING_MODE");
+		if (mapping_mode) {
+			talloc_free(os->ionmesh_cfg->mapping_mode);
+			os->ionmesh_cfg->mapping_mode = talloc_strdup(os->ionmesh_cfg, mapping_mode);
+		}
+		
+		/* Set MCC/MNC if specified */
+		char *mcc_mnc = getenv("IONMESH_MCC_MNC");
+		if (mcc_mnc) {
+			os->ionmesh_cfg->mcc_mnc = talloc_strdup(os->ionmesh_cfg, mcc_mnc);
+		}
+		
+		LOGP(DMAIN, LOGL_INFO, "IonMesh orchestration enabled\n");
+		LOGP(DMAIN, LOGL_INFO, "  Host: %s:%d\n", os->ionmesh_cfg->host, os->ionmesh_cfg->port);
+		LOGP(DMAIN, LOGL_INFO, "  Tenant: %d, Client: %s\n", 
+		     os->ionmesh_cfg->tenant_id, os->ionmesh_cfg->client_id);
+		LOGP(DMAIN, LOGL_INFO, "  Mapping mode: %s\n", os->ionmesh_cfg->mapping_mode);
+		
+		/* Register with IonMesh to get slot assignment */
+		int rc = ionmesh_register_client(os->ionmesh_cfg, &os->ionmesh_assignment);
+		if (rc < 0) {
+			LOGP(DMAIN, LOGL_ERROR, "Failed to register with IonMesh: %d\n", rc);
+			LOGP(DMAIN, LOGL_NOTICE, "Falling back to configured server connection\n");
+			os->use_ionmesh = false;
+		} else {
+			/* Update client configuration with IonMesh assignment */
+			LOGP(DMAIN, LOGL_INFO, "IonMesh assigned: Bank %d, Slot %d\n",
+			     os->ionmesh_assignment.bank_id, os->ionmesh_assignment.slot_id);
+			
+			/* Override server host with bankd from IonMesh */
+			talloc_free(g_client->cfg->server_host);
+			g_client->cfg->server_host = talloc_strdup(g_client->cfg, 
+								   os->ionmesh_assignment.bankd_host);
+			g_client->cfg->server_port = os->ionmesh_assignment.bankd_port;
+			
+			/* Update client slot from IonMesh assignment */
+			remsim_client_set_clslot(g_client, 
+						 os->ionmesh_assignment.bank_id,
+						 os->ionmesh_assignment.slot_id);
+		}
+	}
 
 	LOGP(DMAIN, LOGL_INFO, "OpenWRT client initialized (GPIO SIM: %d, GPIO Reset: %d)\n",
 	     os->sim_switch_gpio, os->modem_reset_gpio);
@@ -390,6 +580,12 @@ int client_user_main(struct bankd_client *g_client)
 	/* Run the main event loop */
 	while (1) {
 		osmo_select_main(0);
+	}
+
+	/* Cleanup: Unregister from IonMesh */
+	if (os->use_ionmesh && os->ionmesh_cfg) {
+		ionmesh_unregister_client(os->ionmesh_cfg);
+		ionmesh_config_free(os->ionmesh_cfg);
 	}
 
 	return 0;

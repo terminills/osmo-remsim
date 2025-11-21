@@ -1,0 +1,230 @@
+<%#
+Copyright (C) 2024 OpenWRT
+Licensed under GNU General Public License v2
+-%>
+
+<%+header%>
+
+<h2 name="content"><%:Remote SIM Client Status%></h2>
+
+<style>
+.status-card {
+	background: #fff;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+	padding: 15px;
+	margin-bottom: 15px;
+}
+.status-card h3 {
+	margin-top: 0;
+	border-bottom: 1px solid #eee;
+	padding-bottom: 10px;
+}
+.status-indicator {
+	display: inline-block;
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	margin-right: 8px;
+}
+.status-running { background-color: #5cb85c; }
+.status-stopped { background-color: #d9534f; }
+.status-warning { background-color: #f0ad4e; }
+.info-row {
+	display: flex;
+	padding: 8px 0;
+	border-bottom: 1px solid #f5f5f5;
+}
+.info-label {
+	font-weight: bold;
+	width: 200px;
+}
+.info-value {
+	flex: 1;
+	font-family: monospace;
+}
+.action-buttons {
+	margin-top: 15px;
+}
+.btn {
+	display: inline-block;
+	padding: 8px 16px;
+	margin-right: 10px;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	text-decoration: none;
+	color: #fff;
+}
+.btn-primary { background-color: #337ab7; }
+.btn-success { background-color: #5cb85c; }
+.btn-danger { background-color: #d9534f; }
+.btn-warning { background-color: #f0ad4e; }
+</style>
+
+<!-- Service Status Card -->
+<div class="status-card">
+	<h3><%:Service Status%></h3>
+	<div class="info-row">
+		<div class="info-label"><%:Status%>:</div>
+		<div class="info-value">
+			<% if service_status.running then %>
+				<span class="status-indicator status-running"></span>
+				<strong><%:Running%></strong> (PID: <%=service_status.pid%>)
+			<% else %>
+				<span class="status-indicator status-stopped"></span>
+				<strong><%:Stopped%></strong>
+			<% end %>
+		</div>
+	</div>
+	<div class="info-row">
+		<div class="info-label"><%:Autostart%>:</div>
+		<div class="info-value">
+			<%= service_status.enabled and "Enabled" or "Disabled" %>
+		</div>
+	</div>
+	
+	<div class="action-buttons">
+		<a href="<%=url('admin/services/remsim/action_restart')%>" class="btn btn-warning">
+			<%:Restart Service%>
+		</a>
+		<a href="javascript:testConnection()" class="btn btn-primary">
+			<%:Test Connection%>
+		</a>
+	</div>
+</div>
+
+<!-- Client Information Card -->
+<div class="status-card">
+	<h3><%:Client Information%></h3>
+	<div class="info-row">
+		<div class="info-label"><%:Client ID%>:</div>
+		<div class="info-value"><%=client_info.client_id%></div>
+	</div>
+	<div class="info-row">
+		<div class="info-label"><%:Client Slot%>:</div>
+		<div class="info-value"><%=client_info.client_slot%></div>
+	</div>
+	<div class="info-row">
+		<div class="info-label"><%:Mapping Mode%>:</div>
+		<div class="info-value"><%=client_info.mapping_mode%></div>
+	</div>
+	<div class="info-row">
+		<div class="info-label"><%:Dual-Modem Mode%>:</div>
+		<div class="info-value">
+			<%= client_info.dual_modem and "Enabled" or "Disabled" %>
+		</div>
+	</div>
+</div>
+
+<!-- IonMesh Status Card -->
+<% if ionmesh_status.enabled then %>
+<div class="status-card">
+	<h3><%:IonMesh Orchestration%></h3>
+	<div class="info-row">
+		<div class="info-label"><%:Status%>:</div>
+		<div class="info-value">
+			<% if ionmesh_status.reachable then %>
+				<span class="status-indicator status-running"></span>
+				<strong><%:Connected%></strong>
+			<% else %>
+				<span class="status-indicator status-warning"></span>
+				<strong><%:Unreachable%></strong>
+			<% end %>
+		</div>
+	</div>
+	<div class="info-row">
+		<div class="info-label"><%:Host%>:</div>
+		<div class="info-value"><%=ionmesh_status.host%>:<%=ionmesh_status.port%></div>
+	</div>
+</div>
+<% end %>
+
+<!-- Modem Status Card -->
+<div class="status-card">
+	<h3><%:Modem Status%></h3>
+	
+	<% if client_info.dual_modem then %>
+		<!-- Modem 1 -->
+		<h4><%:Modem 1 (Primary/Remote SIM)%></h4>
+		<div class="info-row">
+			<div class="info-label"><%:Device%>:</div>
+			<div class="info-value"><%=modem_status.modem1.device%></div>
+		</div>
+		<div class="info-row">
+			<div class="info-label"><%:Present%>:</div>
+			<div class="info-value">
+				<% if modem_status.modem1.present then %>
+					<span class="status-indicator status-running"></span>Yes
+				<% else %>
+					<span class="status-indicator status-stopped"></span>No
+				<% end %>
+			</div>
+		</div>
+		<% if modem_status.modem1.present then %>
+		<div class="info-row">
+			<div class="info-label"><%:Info%>:</div>
+			<div class="info-value"><pre><%=modem_status.modem1.info%></pre></div>
+		</div>
+		<% end %>
+		
+		<br/>
+		
+		<!-- Modem 2 -->
+		<h4><%:Modem 2 (Always-On IoT)%></h4>
+		<div class="info-row">
+			<div class="info-label"><%:Device%>:</div>
+			<div class="info-value"><%=modem_status.modem2.device%></div>
+		</div>
+		<div class="info-row">
+			<div class="info-label"><%:Present%>:</div>
+			<div class="info-value">
+				<% if modem_status.modem2.present then %>
+					<span class="status-indicator status-running"></span>Yes
+				<% else %>
+					<span class="status-indicator status-stopped"></span>No
+				<% end %>
+			</div>
+		</div>
+		<% if modem_status.modem2.present then %>
+		<div class="info-row">
+			<div class="info-label"><%:Info%>:</div>
+			<div class="info-value"><pre><%=modem_status.modem2.info%></pre></div>
+		</div>
+		<% end %>
+		
+	<% else %>
+		<!-- Single Modem -->
+		<div class="info-row">
+			<div class="info-label"><%:Device%>:</div>
+			<div class="info-value"><%=modem_status.single.device%></div>
+		</div>
+		<div class="info-row">
+			<div class="info-label"><%:Present%>:</div>
+			<div class="info-value">
+				<% if modem_status.single.present then %>
+					<span class="status-indicator status-running"></span>Yes
+				<% else %>
+					<span class="status-indicator status-stopped"></span>No
+				<% end %>
+			</div>
+		</div>
+		<% if modem_status.single.present then %>
+		<div class="info-row">
+			<div class="info-label"><%:Info%>:</div>
+			<div class="info-value"><pre><%=modem_status.single.info%></pre></div>
+		</div>
+		<% end %>
+	<% end %>
+</div>
+
+<script>
+function testConnection() {
+	var xhr = new XHR();
+	xhr.get('<%=url("admin/services/remsim/action_test")%>', null, function(x, data) {
+		alert('Connection Test Result:\n\n' + data);
+	});
+}
+</script>
+
+<%+footer%>

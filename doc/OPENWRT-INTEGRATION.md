@@ -316,11 +316,42 @@ osmo-remsim-client-openwrt \
   -i 192.168.1.100 -c 1 -n 0
 ```
 
+## IonMesh Orchestration
+
+For large-scale deployments, consider using **IonMesh orchestrator** for centralized SIM bank management:
+
+- **Dynamic Slot Assignment**: Automatic SIM slot allocation from available banks
+- **Multi-Tenancy**: Isolated environments for multiple resellers/customers
+- **KI Proxy**: Centralized authentication without exposing Ki keys
+- **Load Balancing**: Distribute clients across multiple bankd instances
+- **Health Monitoring**: Track client status and performance metrics
+
+See [IONMESH-INTEGRATION.md](IONMESH-INTEGRATION.md) for detailed orchestration setup.
+
+### Quick Start with IonMesh
+
+```bash
+# Configure IonMesh connection
+export IONMESH_HOST="ionmesh.example.com"
+export IONMESH_PORT="5000"
+export IONMESH_TENANT_ID="1"
+export IONMESH_MAPPING_MODE="KI_PROXY_SWSIM"
+
+# Run client with IonMesh orchestration
+osmo-remsim-client-openwrt \
+  -e /etc/remsim/ionmesh-event-script.sh \
+  -V 20 -P 21
+```
+
+The client will automatically register with IonMesh and receive slot assignment, bankd connection details, and ICCID/IMSI provisioning.
+
 ## Related Documentation
 
+- [IonMesh Orchestrator Integration](IONMESH-INTEGRATION.md) - **NEW!** Centralized management
 - [osmo-remsim User Manual](https://downloads.osmocom.org/docs/latest/osmo-remsim-usermanual.pdf)
 - [RSPRO Protocol Specification](https://osmocom.org/projects/osmo-remsim/wiki)
 - [OpenWRT Development Guide](https://openwrt.org/docs/guide-developer/start)
+- [IonMesh Repository](https://github.com/terminills/ionmesh-fork)
 
 ## Support
 
