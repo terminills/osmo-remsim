@@ -429,6 +429,18 @@ This document provides a comprehensive overview of the osmo-remsim OpenWRT integ
 **Mitigation**: Order hardware early, use emulators where possible  
 **Impact**: Low  
 
+## Code Quality Notes
+
+**Important**: The code examples in the documentation are for illustration purposes. Before production deployment:
+
+1. **Refactor Helper Functions**: Move `_find_available_slot`, `_log_audit`, and `_log_slot_health` from `app/routes/api/remsim_api.py` to `app/utils/remsim_utils.py` to avoid circular dependencies
+2. **Add Error Handling**: All example code should include comprehensive error handling for missing files, failed connections, and invalid data
+3. **Define Constants**: GPIO numbers, timeouts, and other magic numbers should be defined as constants or read from configuration
+4. **Production URLs**: Replace localhost/example.com with appropriate production URLs in configuration
+5. **Security Hardening**: Implement API key authentication, TLS verification, and rate limiting before production use
+
+These improvements should be implemented during Phase 1 development.
+
 ## Next Actions
 
 ### Immediate (This Week)
@@ -436,6 +448,7 @@ This document provides a comprehensive overview of the osmo-remsim OpenWRT integ
 2. Set up development environment
 3. Order test hardware
 4. Create GitHub issues for Phase 1 tasks
+5. **Address code quality notes** from review
 
 ### Short-term (Next 2 Weeks)
 1. Implement IonMesh API endpoints

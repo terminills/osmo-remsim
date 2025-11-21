@@ -962,6 +962,54 @@ def prometheus_metrics():
 
 ---
 
+## Code Quality Recommendations
+
+**⚠️ Important**: The code examples provided in this document are for illustration and learning purposes. Before production deployment, the following improvements should be implemented:
+
+### 1. Refactor Utility Functions
+Move helper functions to a dedicated utilities module:
+```python
+# Create: app/utils/remsim_utils.py
+def find_available_slot(mapping_mode, mcc_mnc=None, bank_id=None, tenant_id=None):
+    """Public interface for slot assignment"""
+    # Implementation here
+
+def log_audit(action, entity_type, entity_id, tenant_id=None, details=None):
+    """Public interface for audit logging"""
+    # Implementation here
+
+def log_slot_health(slot_id, event_type, details):
+    """Public interface for health logging"""
+    # Implementation here
+```
+
+### 2. Add Comprehensive Error Handling
+All endpoints should include:
+- Input validation
+- Database error handling
+- External API timeout handling
+- Proper HTTP status codes
+- Detailed error messages
+
+### 3. Security Hardening
+- Implement API key authentication
+- Add rate limiting (e.g., 100 requests/minute per client)
+- Enable TLS/SSL for all API endpoints
+- Validate and sanitize all user inputs
+- Implement CORS policies
+
+### 4. Configuration Management
+- Define all constants in configuration files
+- Support environment-specific configurations (dev/staging/prod)
+- Use environment variables for sensitive data
+- Document all configuration options
+
+### 5. Testing
+- Unit tests for all endpoints (>90% coverage)
+- Integration tests for complete workflows
+- Performance tests (1000+ clients)
+- Security penetration testing
+
 ## Implementation Timeline
 
 ### Phase 1: Critical API Endpoints (Week 1-2)
