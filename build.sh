@@ -394,7 +394,7 @@ build_osmocom_dependencies() {
         build_dependency \
             "talloc" \
             "https://git.samba.org/talloc.git" \
-            "master" \
+            "talloc-2.4.2" \
             "" \
             "https://github.com/samba-team/talloc.git"
     fi
