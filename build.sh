@@ -33,6 +33,7 @@ INST_DIR="${DEPS_DIR}/install"
 BUILD_TYPE="full"
 DO_INSTALL=0
 OPENWRT_MODE=0
+SKIP_DEPS=0
 
 # Default installation prefix
 PREFIX="${PREFIX:-/usr/local}"
@@ -78,6 +79,7 @@ Options:
   --install           Install binaries after building (requires sudo)
   --clean             Clean build artifacts before building
   --deps-only         Only download and build dependencies
+  --skip-deps         Skip building Osmocom dependencies (use system or pre-installed)
 
 Environment Variables:
   WITH_MANUALS=1               Build manual PDFs
@@ -91,6 +93,9 @@ Examples:
 
   # Build only client components
   ./build.sh --client-only
+
+  # Build using system/pre-installed dependencies (for custom forks)
+  ./build.sh --skip-deps
 
   # Build and install to system
   sudo ./build.sh --install
@@ -135,6 +140,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --deps-only)
             BUILD_TYPE="deps"
+            shift
+            ;;
+        --skip-deps)
+            SKIP_DEPS=1
             shift
             ;;
         *)
@@ -461,9 +470,15 @@ build_osmo_remsim() {
     cd "${BASE_DIR}"
     
     # Setup PKG_CONFIG_PATH and LD_LIBRARY_PATH
-    export PKG_CONFIG_PATH="${INST_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}"
-    export LD_LIBRARY_PATH="${INST_DIR}/lib:${LD_LIBRARY_PATH}"
-    export PATH="${INST_DIR}/bin:${PATH}"
+    # Only add deps/install paths if we built dependencies
+    if [ "$SKIP_DEPS" -eq 0 ] && [ -d "${INST_DIR}" ]; then
+        export PKG_CONFIG_PATH="${INST_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}"
+        export LD_LIBRARY_PATH="${INST_DIR}/lib:${LD_LIBRARY_PATH}"
+        export PATH="${INST_DIR}/bin:${PATH}"
+        log_info "Using dependencies from: ${INST_DIR}"
+    else
+        log_info "Using system or pre-installed dependencies"
+    fi
     
     # Run autoreconf if needed
     if [ ! -f configure ]; then
@@ -574,8 +589,13 @@ main() {
         install_system_dependencies
     fi
     
-    # Build dependencies
-    build_osmocom_dependencies
+    # Build dependencies (unless skipped)
+    if [ "$SKIP_DEPS" -eq 0 ]; then
+        build_osmocom_dependencies
+    else
+        log_info "Skipping Osmocom dependency build (--skip-deps specified)"
+        log_info "Using system or pre-installed dependencies"
+    fi
     
     # Build osmo-remsim (unless deps-only mode)
     if [ "$BUILD_TYPE" != "deps" ]; then

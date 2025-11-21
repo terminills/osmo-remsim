@@ -44,6 +44,10 @@ The build script will:
 # Only download and build dependencies
 ./build.sh --deps-only
 
+# Skip building dependencies (use system or pre-installed)
+# Useful for custom forks with modified dependencies
+./build.sh --skip-deps
+
 # Build and install to system (requires sudo)
 sudo ./build.sh --install
 ```
@@ -76,6 +80,32 @@ export OPENWRT_SDK_PATH=$(pwd)/openwrt-sdk-*
 ```
 
 The built binary will be at: `src/client/osmo-remsim-client-openwrt`
+
+### Building Custom Forks
+
+If you're working with a custom fork that has modified dependencies or additional components not in the upstream version:
+
+```bash
+# Option 1: Skip automatic dependency building and use your own
+# This assumes you have the required Osmocom libraries (libosmocore, libosmo-netif, etc.) 
+# already installed on your system or built separately
+./build.sh --skip-deps --client-only
+
+# Option 2: Set PKG_CONFIG_PATH to point to your custom dependencies
+export PKG_CONFIG_PATH=/path/to/your/custom/libs/pkgconfig:$PKG_CONFIG_PATH
+./build.sh --skip-deps
+
+# Option 3: Build only the system dependencies, then build manually
+./build.sh --deps-only
+# ... build your custom dependencies ...
+# ... then continue with osmo-remsim build ...
+```
+
+**Why use `--skip-deps`?**
+- Your fork has custom or modified versions of Osmocom libraries
+- You've already built dependencies separately
+- You want to use system-installed dependencies
+- You have a custom build process for prerequisites
 
 ## Manual Build Process
 
