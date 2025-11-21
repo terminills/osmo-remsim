@@ -74,19 +74,23 @@ The build script supports two methods for OpenWRT SDK management:
 Use this method when you need version-controlled, reproducible builds:
 
 ```bash
-# 1. Add OpenWRT SDK as a git submodule (one-time setup)
-# Replace URL with your SDK repository or extracted SDK location
-git submodule add <your-openwrt-sdk-repo-url> openwrt-sdk
-
-# Or manually place/extract SDK in openwrt-sdk/ directory
-# wget https://downloads.openwrt.org/releases/22.03.5/targets/ramips/mt7621/openwrt-sdk-22.03.5-ramips-mt7621_gcc-11.2.0_musl.Linux-x86_64.tar.xz
-# tar xf openwrt-sdk-*.tar.xz
-# mv openwrt-sdk-* openwrt-sdk
-
-# 2. Initialize submodule (if using git submodule)
+# Option A: Add OpenWRT SDK as a git submodule (if you have SDK in a git repo)
+# This is ideal if you maintain your own SDK repository or use a team/CI repo
+git submodule add https://github.com/your-org/openwrt-sdk.git openwrt-sdk
 git submodule update --init --recursive
 
-# 3. Build - script auto-detects the submodule
+# Option B: Manually place extracted SDK in openwrt-sdk/ directory
+# Download SDK for your target architecture from https://downloads.openwrt.org
+wget https://downloads.openwrt.org/releases/22.03.5/targets/ramips/mt7621/openwrt-sdk-22.03.5-ramips-mt7621_gcc-11.2.0_musl.Linux-x86_64.tar.xz
+tar xf openwrt-sdk-*.tar.xz
+mv openwrt-sdk-* openwrt-sdk
+
+# Then optionally add it as a submodule to track the directory
+# (Note: The SDK download itself isn't a git repo, but you can make it one)
+cd openwrt-sdk && git init && git add . && git commit -m "Initial SDK"
+cd .. && git submodule add ./openwrt-sdk openwrt-sdk
+
+# Build - script auto-detects the openwrt-sdk/ directory
 ./build.sh --openwrt
 ```
 
