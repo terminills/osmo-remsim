@@ -67,6 +67,9 @@ JOBS=8 ./build.sh
 
 ### OpenWRT Cross-Compilation
 
+**Default Version**: OpenWrt SNAPSHOT r31338-c18476d0c5 (ramips/mt7621 target)  
+This matches the current version deployed on production routers.
+
 The build script supports two methods for OpenWRT SDK management:
 
 #### Method 1: Git Submodule (Recommended for Automated/Nightly Builds)
@@ -81,7 +84,8 @@ git submodule update --init --recursive
 
 # Option B: Manually place extracted SDK in openwrt-sdk/ directory
 # Download SDK for your target architecture from https://downloads.openwrt.org
-wget https://downloads.openwrt.org/releases/22.03.5/targets/ramips/mt7621/openwrt-sdk-22.03.5-ramips-mt7621_gcc-11.2.0_musl.Linux-x86_64.tar.xz
+# Using OpenWrt SNAPSHOT r31338 (current router version)
+wget https://downloads.openwrt.org/snapshots/targets/ramips/mt7621/openwrt-sdk-ramips-mt7621_gcc-13.3.0_musl.Linux-x86_64.tar.xz
 tar xf openwrt-sdk-*.tar.xz
 mv openwrt-sdk-* openwrt-sdk
 
@@ -106,7 +110,8 @@ Use this method for one-off builds or when switching SDK versions frequently:
 
 ```bash
 # 1. Download and extract OpenWRT SDK
-wget https://downloads.openwrt.org/releases/22.03.5/targets/ramips/mt7621/openwrt-sdk-22.03.5-ramips-mt7621_gcc-11.2.0_musl.Linux-x86_64.tar.xz
+# Using OpenWrt SNAPSHOT r31338 (current router version)
+wget https://downloads.openwrt.org/snapshots/targets/ramips/mt7621/openwrt-sdk-ramips-mt7621_gcc-13.3.0_musl.Linux-x86_64.tar.xz
 tar xf openwrt-sdk-*.tar.xz
 
 # 2. Set SDK path and build
