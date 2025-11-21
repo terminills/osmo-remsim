@@ -110,6 +110,11 @@ static void bankd_init(struct bankd *bankd)
 	bankd->cfg.ki_proxy.carrier = 0;
 	bankd->cfg.ki_proxy.imsi = NULL;
 	bankd->cfg.ki_proxy.iccid = NULL;
+	bankd->cfg.ki_proxy.proxy_slots = NULL;
+	bankd->cfg.ki_proxy.num_proxy_slots = 0;
+	bankd->cfg.ki_proxy.next_slot_idx = 0;
+	bankd->cfg.ki_proxy.virtual_slot_start = 0;
+	bankd->cfg.ki_proxy.virtual_slot_end = 0;
 }
 
 /* create + start a new bankd_worker thread */
@@ -309,7 +314,9 @@ static void printf_help(FILE *out)
 "  -g --gsmtap-ip A.B.C.D       Enable GSMTAP and send APDU traces to given IP\n"
 "  -G --gsmtap-slot <0-1023>    Limit tracing to given bank slot, only (default: all slots)\n"
 "  -k --ki-proxy-enable         Enable KI Proxy Mode\n"
-"  -K --ki-proxy-slot <0-1023>  KI Proxy slot number\n"
+"  -K --ki-proxy-slot <0-1023>  KI Proxy physical slot (single slot legacy mode)\n"
+"  -S --ki-proxy-slots <s1,s2,...> KI Proxy physical slot pool for round-robin (e.g., 1-50)\n"
+"  -V --ki-proxy-virtual <start-end> Virtual slot range that uses KI proxy (e.g., 900-999)\n"
 "  -C --ki-proxy-carrier <num>  KI Proxy carrier number\n"
 "  -M --ki-proxy-imsi <imsi>    KI Proxy IMSI\n"
 "  -c --ki-proxy-iccid <iccid>  KI Proxy ICCID\n"
@@ -345,13 +352,15 @@ static void handle_options(int argc, char **argv)
 			{ "log-level", 1, 0, 'e' },
 			{ "ki-proxy-enable", 0, 0, 'k' },
 			{ "ki-proxy-slot", 1, 0, 'K' },
+			{ "ki-proxy-slots", 1, 0, 'S' },
+			{ "ki-proxy-virtual", 1, 0, 'V' },
 			{ "ki-proxy-carrier", 1, 0, 'C' },
 			{ "ki-proxy-imsi", 1, 0, 'M' },
 			{ "ki-proxy-iccid", 1, 0, 'c' },
 			{ 0, 0, 0, 0 }
 		};
 
-		c = getopt_long(argc, argv, "hVd:i:p:b:n:N:I:P:sg:G:LTe:kK:C:M:c:", long_options, &option_index);
+		c = getopt_long(argc, argv, "hVd:i:p:b:n:N:I:P:sg:G:LTe:kK:S:V:C:M:c:", long_options, &option_index);
 		if (c == -1)
 			break;
 
@@ -417,6 +426,73 @@ static void handle_options(int argc, char **argv)
 					exit(2);
 				}
 				g_bankd->cfg.ki_proxy.proxy_slot = slot;
+			}
+			break;
+		case 'S':
+			{
+				/* Parse comma-separated or range-based slot list */
+				/* Examples: "1,2,3" or "1-50" or "1-10,20-30" */
+				char *slots_str = talloc_strdup(g_bankd, optarg);
+				char *token, *saveptr;
+				unsigned int temp_slots[1024];
+				unsigned int count = 0;
+				
+				token = strtok_r(slots_str, ",", &saveptr);
+				while (token && count < 1024) {
+					char *dash = strchr(token, '-');
+					if (dash) {
+						/* Range format: "1-50" */
+						*dash = '\0';
+						int start = atoi(token);
+						int end = atoi(dash + 1);
+						if (start < 0 || end > 1023 || start > end) {
+							fprintf(stderr, "Error: Invalid KI Proxy slot range %d-%d\n", start, end);
+							exit(2);
+						}
+						for (int i = start; i <= end && count < 1024; i++) {
+							temp_slots[count++] = i;
+						}
+					} else {
+						/* Single slot */
+						int slot = atoi(token);
+						if (slot < 0 || slot > 1023) {
+							fprintf(stderr, "Error: KI Proxy slot must be 0-1023\n");
+							exit(2);
+						}
+						temp_slots[count++] = slot;
+					}
+					token = strtok_r(NULL, ",", &saveptr);
+				}
+				
+				if (count > 0) {
+					g_bankd->cfg.ki_proxy.proxy_slots = talloc_array(g_bankd, unsigned int, count);
+					memcpy(g_bankd->cfg.ki_proxy.proxy_slots, temp_slots, count * sizeof(unsigned int));
+					g_bankd->cfg.ki_proxy.num_proxy_slots = count;
+					fprintf(stderr, "KI Proxy: Configured %u slots for round-robin routing\n", count);
+				}
+				
+				talloc_free(slots_str);
+			}
+			break;
+		case 'V':
+			{
+				/* Parse virtual slot range: "900-999" */
+				char *dash = strchr(optarg, '-');
+				if (dash) {
+					*dash = '\0';
+					int start = atoi(optarg);
+					int end = atoi(dash + 1);
+					if (start < 0 || end > 1023 || start > end) {
+						fprintf(stderr, "Error: Invalid virtual slot range %d-%d\n", start, end);
+						exit(2);
+					}
+					g_bankd->cfg.ki_proxy.virtual_slot_start = start;
+					g_bankd->cfg.ki_proxy.virtual_slot_end = end;
+					fprintf(stderr, "KI Proxy: Virtual slots %u-%u will use KI proxy routing\n", start, end);
+				} else {
+					fprintf(stderr, "Error: Virtual slot range must be in format start-end (e.g., 900-999)\n");
+					exit(2);
+				}
 			}
 			break;
 		case 'C':
@@ -821,7 +897,9 @@ static int worker_handle_ki_proxy(struct bankd_worker *worker, const uint8_t *ap
 {
 	struct bankd_worker *proxy_worker = NULL;
 	struct bankd_worker *w;
-	struct bank_slot proxy_slot = { .bank_id = worker->slot.bank_id, .slot_nr = g_bankd->cfg.ki_proxy.proxy_slot };
+	struct bank_slot proxy_slot;
+	unsigned int selected_slot;
+	unsigned int attempts = 0;
 	int rc;
 
 	/* Validate input parameters */
@@ -830,15 +908,53 @@ static int worker_handle_ki_proxy(struct bankd_worker *worker, const uint8_t *ap
 		return -1;
 	}
 
-	/* Validate proxy slot configuration */
-	if (g_bankd->cfg.ki_proxy.proxy_slot >= g_bankd->srvc.bankd.num_slots) {
-		LOGW(worker, "KI Proxy: Invalid proxy slot %u (max: %u)\n", 
-		     g_bankd->cfg.ki_proxy.proxy_slot, g_bankd->srvc.bankd.num_slots - 1);
-		return -1;
+	/* Select proxy slot: use round-robin pool if available, otherwise fall back to single slot */
+	if (g_bankd->cfg.ki_proxy.num_proxy_slots > 0) {
+		/* Round-robin selection from pool */
+		unsigned int max_attempts = g_bankd->cfg.ki_proxy.num_proxy_slots;
+		
+		while (attempts < max_attempts) {
+			/* Get next slot from pool (round-robin) */
+			selected_slot = g_bankd->cfg.ki_proxy.proxy_slots[g_bankd->cfg.ki_proxy.next_slot_idx];
+			
+			/* Advance to next slot for next call */
+			g_bankd->cfg.ki_proxy.next_slot_idx = 
+				(g_bankd->cfg.ki_proxy.next_slot_idx + 1) % g_bankd->cfg.ki_proxy.num_proxy_slots;
+			
+			/* Validate slot is within bounds */
+			if (selected_slot >= g_bankd->srvc.bankd.num_slots) {
+				LOGW(worker, "KI Proxy: Invalid proxy slot %u in pool (max: %u), skipping\n",
+				     selected_slot, g_bankd->srvc.bankd.num_slots - 1);
+				attempts++;
+				continue;
+			}
+			
+			/* Found valid slot, try to use it */
+			break;
+		}
+		
+		if (attempts >= max_attempts) {
+			LOGW(worker, "KI Proxy: No valid proxy slots available in pool\n");
+			return -1;
+		}
+		
+		LOGW(worker, "KI Proxy: Using round-robin slot %u from pool of %u slots\n",
+		     selected_slot, g_bankd->cfg.ki_proxy.num_proxy_slots);
+	} else {
+		/* Single slot mode (legacy) */
+		selected_slot = g_bankd->cfg.ki_proxy.proxy_slot;
+		
+		if (selected_slot >= g_bankd->srvc.bankd.num_slots) {
+			LOGW(worker, "KI Proxy: Invalid proxy slot %u (max: %u)\n", 
+			     selected_slot, g_bankd->srvc.bankd.num_slots - 1);
+			return -1;
+		}
+		
+		LOGW(worker, "KI Proxy: Routing RUN GSM ALGORITHM to proxy slot %u\n", selected_slot);
 	}
 
-	LOGW(worker, "KI Proxy: Routing RUN GSM ALGORITHM to proxy slot %u\n", 
-	     g_bankd->cfg.ki_proxy.proxy_slot);
+	proxy_slot.bank_id = worker->slot.bank_id;
+	proxy_slot.slot_nr = selected_slot;
 
 	/* Find the worker for the proxy slot */
 	pthread_mutex_lock(&g_bankd->workers_mutex);
@@ -907,12 +1023,23 @@ static int worker_handle_tpduModemToCard(struct bankd_worker *worker, const Rspr
 		return -106;
 	}
 
-	/* Check for KI Proxy interception - RUN GSM ALGORITHM (0x88) */
+	/* Check for KI Proxy interception - RUN GSM ALGORITHM (0x88) 
+	 * Only intercept if:
+	 * 1. KI Proxy is enabled
+	 * 2. This is an authentication APDU (0x88)
+	 * 3. This slot is a virtual slot that should use KI proxy
+	 */
+	bool is_virtual_slot = (g_bankd->cfg.ki_proxy.virtual_slot_start > 0 &&
+	                        worker->slot.slot_nr >= g_bankd->cfg.ki_proxy.virtual_slot_start &&
+	                        worker->slot.slot_nr <= g_bankd->cfg.ki_proxy.virtual_slot_end);
+	
 	if (g_bankd->cfg.ki_proxy.enabled && mdm2sim->data.size > 1 && 
-	    mdm2sim->data.buf[1] == 0x88) {
+	    mdm2sim->data.buf[1] == 0x88 && is_virtual_slot) {
+		/* Route to KI proxy pool */
 		rc = worker_handle_ki_proxy(worker, mdm2sim->data.buf, mdm2sim->data.size,
 					    rx_buf, &rx_buf_len);
 	} else {
+		/* Normal transceive to physical slot */
 		rc = worker->ops->transceive(worker, mdm2sim->data.buf, mdm2sim->data.size,
 					     rx_buf, &rx_buf_len);
 	}

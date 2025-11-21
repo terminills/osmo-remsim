@@ -24,9 +24,9 @@ struct ionmesh_config {
 /* IonMesh slot assignment response */
 struct ionmesh_assignment {
 	int bank_id;               /* Assigned SIM bank ID */
-	int slot_id;               /* Assigned slot ID within bank */
-	char iccid[32];            /* Assigned ICCID */
-	char imsi[32];             /* Assigned IMSI */
+	int slot_id;               /* Assigned slot ID (virtual or physical depending on mode) */
+	char iccid[32];            /* Assigned ICCID (virtual or physical) */
+	char imsi[32];             /* Assigned IMSI (virtual or physical) */
 	char bankd_host[256];      /* Bankd server hostname/IP */
 	int bankd_port;            /* Bankd server port */
 	char mapping_mode[32];     /* Confirmed mapping mode */
