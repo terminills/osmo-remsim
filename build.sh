@@ -388,12 +388,7 @@ build_osmocom_dependencies() {
     mkdir -p "${INST_DIR}"
     
     # Build libosmocore
-    # In OpenWRT mode, use embedded and pseudotalloc options
     local libosmocore_opts="--disable-doxygen"
-    if [ "$OPENWRT_MODE" -eq 1 ]; then
-        libosmocore_opts="$libosmocore_opts --enable-embedded --enable-pseudotalloc"
-        log_info "Using embedded build options for libosmocore (OpenWRT mode)"
-    fi
     build_dependency \
         "libosmocore" \
         "https://git.osmocom.org/libosmocore" \
