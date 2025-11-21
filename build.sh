@@ -1,0 +1,633 @@
+#!/bin/bash
+# build.sh - Comprehensive build script for osmo-remsim
+#
+# This script downloads all prerequisites and builds osmo-remsim including OpenWRT modules.
+#
+# Usage:
+#   ./build.sh                    # Build everything (server, bankd, clients)
+#   ./build.sh --help             # Show help
+#   ./build.sh --client-only      # Build only client components
+#   ./build.sh --openwrt          # Setup for OpenWRT cross-compilation
+#   ./build.sh --install          # Install after building
+#
+# Environment variables:
+#   WITH_MANUALS=1               # Build manual PDFs
+#   OPENWRT_SDK_PATH=<path>      # Path to OpenWRT SDK for cross-compilation
+#   PREFIX=/usr/local            # Installation prefix (default: /usr/local)
+#   JOBS=<n>                     # Number of parallel make jobs (default: auto-detect)
+
+set -e  # Exit on error
+
+# Color output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="$SCRIPT_DIR"
+DEPS_DIR="${BASE_DIR}/deps"
+INST_DIR="${DEPS_DIR}/install"
+BUILD_TYPE="full"
+DO_INSTALL=0
+OPENWRT_MODE=0
+SKIP_DEPS=0
+
+# Default installation prefix
+PREFIX="${PREFIX:-/usr/local}"
+
+# Detect number of CPU cores for parallel builds
+if [ -z "$JOBS" ]; then
+    if command -v nproc &> /dev/null; then
+        JOBS=$(nproc)
+    else
+        JOBS=1
+    fi
+fi
+
+PARALLEL_MAKE="-j${JOBS}"
+
+# Helper functions
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $*"
+}
+
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $*"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $*"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $*"
+}
+
+show_help() {
+    cat << EOF
+osmo-remsim Build Script
+
+Usage: $0 [OPTIONS]
+
+Options:
+  --help              Show this help message
+  --client-only       Build only client components (no server/bankd)
+  --openwrt           Setup for OpenWRT cross-compilation
+  --install           Install binaries after building (requires sudo)
+  --clean             Clean build artifacts before building
+  --deps-only         Only download and build dependencies
+  --skip-deps         Skip building Osmocom dependencies (use system or pre-installed)
+
+Environment Variables:
+  WITH_MANUALS=1               Build manual PDFs
+  OPENWRT_SDK_PATH=<path>      Path to OpenWRT SDK for cross-compilation
+  PREFIX=/path/to/install      Installation prefix (default: /usr/local)
+  JOBS=<n>                     Number of parallel make jobs
+
+Examples:
+  # Build everything with default settings
+  ./build.sh
+
+  # Build only client components
+  ./build.sh --client-only
+
+  # Build using system/pre-installed dependencies (for custom forks)
+  ./build.sh --skip-deps
+
+  # Build and install to system
+  sudo ./build.sh --install
+
+  # Clean build
+  ./build.sh --clean
+
+  # Setup for OpenWRT cross-compilation
+  export OPENWRT_SDK_PATH=/path/to/openwrt-sdk
+  ./build.sh --openwrt
+
+EOF
+}
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --help|-h)
+            show_help
+            exit 0
+            ;;
+        --client-only)
+            BUILD_TYPE="client"
+            shift
+            ;;
+        --openwrt)
+            OPENWRT_MODE=1
+            BUILD_TYPE="client"
+            shift
+            ;;
+        --install)
+            DO_INSTALL=1
+            shift
+            ;;
+        --clean)
+            log_info "Cleaning build artifacts..."
+            rm -rf "${DEPS_DIR}"
+            make clean 2>/dev/null || true
+            make distclean 2>/dev/null || true
+            log_success "Cleaned"
+            shift
+            ;;
+        --deps-only)
+            BUILD_TYPE="deps"
+            shift
+            ;;
+        --skip-deps)
+            SKIP_DEPS=1
+            shift
+            ;;
+        *)
+            log_error "Unknown option: $1"
+            show_help
+            exit 1
+            ;;
+    esac
+done
+
+# Detect package manager
+detect_package_manager() {
+    if command -v apt-get &> /dev/null; then
+        echo "apt"
+    elif command -v yum &> /dev/null; then
+        echo "yum"
+    elif command -v dnf &> /dev/null; then
+        echo "dnf"
+    elif command -v zypper &> /dev/null; then
+        echo "zypper"
+    elif command -v pacman &> /dev/null; then
+        echo "pacman"
+    elif command -v opkg &> /dev/null; then
+        echo "opkg"
+    else
+        echo "unknown"
+    fi
+}
+
+# Install system dependencies
+install_system_dependencies() {
+    local pkg_mgr=$(detect_package_manager)
+    
+    log_info "Detected package manager: $pkg_mgr"
+    log_info "Installing system dependencies..."
+    
+    case $pkg_mgr in
+        apt)
+            log_info "Using apt-get to install dependencies..."
+            sudo apt-get update
+            sudo apt-get install -y \
+                build-essential \
+                git \
+                autoconf \
+                automake \
+                libtool \
+                pkg-config \
+                libtalloc-dev \
+                libpcsclite-dev \
+                libusb-1.0-0-dev \
+                libcsv-dev \
+                libjansson-dev \
+                libulfius-dev \
+                liborcania-dev \
+                liburing-dev \
+                libsctp-dev \
+                libmnl-dev \
+                python3 \
+                python3-pip \
+                wget \
+                curl
+            ;;
+        yum|dnf)
+            log_info "Using $pkg_mgr to install dependencies..."
+            sudo $pkg_mgr install -y \
+                gcc \
+                gcc-c++ \
+                make \
+                git \
+                autoconf \
+                automake \
+                libtool \
+                pkg-config \
+                talloc-devel \
+                pcsc-lite-devel \
+                libusb1-devel \
+                libcsv-devel \
+                jansson-devel \
+                ulfius-devel \
+                orcania-devel \
+                python3 \
+                python3-pip \
+                wget \
+                curl
+            ;;
+        zypper)
+            log_info "Using zypper to install dependencies..."
+            sudo zypper install -y \
+                gcc \
+                gcc-c++ \
+                make \
+                git \
+                autoconf \
+                automake \
+                libtool \
+                pkg-config \
+                libtalloc-devel \
+                pcsc-lite-devel \
+                libusb-1_0-devel \
+                libcsv-devel \
+                libjansson-devel \
+                python3 \
+                python3-pip \
+                wget \
+                curl
+            ;;
+        pacman)
+            log_info "Using pacman to install dependencies..."
+            sudo pacman -Sy --noconfirm \
+                base-devel \
+                git \
+                autoconf \
+                automake \
+                libtool \
+                pkg-config \
+                talloc \
+                pcsclite \
+                libusb \
+                jansson \
+                python \
+                python-pip \
+                wget \
+                curl
+            ;;
+        opkg)
+            log_info "Using opkg (OpenWRT) to install dependencies..."
+            opkg update
+            opkg install \
+                gcc \
+                make \
+                git \
+                autoconf \
+                automake \
+                libtool \
+                pkg-config \
+                libusb-1.0 \
+                python3
+            ;;
+        unknown)
+            log_warn "Could not detect package manager!"
+            log_warn "Please install the following dependencies manually:"
+            log_warn "  - build-essential/gcc/make"
+            log_warn "  - git, autoconf, automake, libtool, pkg-config"
+            log_warn "  - libtalloc-dev, libpcsclite-dev, libusb-1.0-dev"
+            log_warn "  - libcsv-dev, libjansson-dev, libulfius-dev"
+            read -p "Continue anyway? (y/N) " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ "^[Yy]$" ]]; then
+                exit 1
+            fi
+            ;;
+    esac
+    
+    log_success "System dependencies installed"
+}
+
+# Build and install a dependency from git
+build_dependency() {
+    local name=$1
+    local repo_url=$2
+    local branch=${3:-master}
+    local configure_opts=${4:-}
+    local fallback_url=${5:-}
+    
+    log_info "Building dependency: $name"
+    
+    # Create deps directory if it doesn't exist
+    mkdir -p "${DEPS_DIR}"
+    cd "${DEPS_DIR}"
+    
+    # Clone or update repository
+    if [ -d "$name" ]; then
+        log_info "Updating existing repository: $name"
+        cd "$name"
+        git fetch origin
+        git checkout "$branch"
+        git pull
+    else
+        log_info "Cloning repository: $name"
+        if ! git clone "$repo_url" "$name" 2>/dev/null; then
+            if [ -n "$fallback_url" ]; then
+                log_warn "Primary repository failed, trying fallback..."
+                git clone "$fallback_url" "$name"
+            else
+                log_error "Failed to clone repository: $name"
+                exit 1
+            fi
+        fi
+        cd "$name"
+        git checkout "$branch"
+    fi
+    
+    # Build and install
+    log_info "Building $name..."
+    autoreconf -fi
+    
+    # Setup PKG_CONFIG_PATH and LD_LIBRARY_PATH for dependencies
+    export PKG_CONFIG_PATH="${INST_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}"
+    export LD_LIBRARY_PATH="${INST_DIR}/lib:${LD_LIBRARY_PATH}"
+    export PATH="${INST_DIR}/bin:${PATH}"
+    
+    ./configure --prefix="${INST_DIR}" $configure_opts
+    make ${PARALLEL_MAKE}
+    make install
+    
+    log_success "Built and installed: $name"
+    cd "${BASE_DIR}"
+}
+
+# Download and build Osmocom dependencies
+build_osmocom_dependencies() {
+    log_info "Building Osmocom dependencies..."
+    
+    mkdir -p "${INST_DIR}"
+    
+    # Build libosmocore
+    build_dependency \
+        "libosmocore" \
+        "https://git.osmocom.org/libosmocore" \
+        "master" \
+        "--disable-doxygen" \
+        "https://github.com/osmocom/libosmocore.git"
+    
+    # Build libosmo-netif
+    build_dependency \
+        "libosmo-netif" \
+        "https://git.osmocom.org/libosmo-netif" \
+        "master" \
+        "--disable-doxygen" \
+        "https://github.com/osmocom/libosmo-netif.git"
+    
+    # Build simtrace2 (for client-st2 support)
+    # Note: simtrace2 has the build system in host/ subdirectory
+    if [ "$BUILD_TYPE" != "client" ] || [ "$OPENWRT_MODE" -eq 0 ]; then
+        log_info "Building dependency: simtrace2"
+        mkdir -p "${DEPS_DIR}"
+        cd "${DEPS_DIR}"
+        
+        if [ -d "simtrace2" ]; then
+            log_info "Updating existing repository: simtrace2"
+            cd "simtrace2"
+            git fetch origin
+            git checkout master
+            git pull
+        else
+            log_info "Cloning repository: simtrace2"
+            if ! git clone "https://git.osmocom.org/simtrace2" "simtrace2" 2>/dev/null; then
+                log_warn "Primary repository failed, trying fallback..."
+                git clone "https://github.com/osmocom/simtrace2.git" "simtrace2"
+            fi
+            cd "simtrace2"
+        fi
+        
+        # Build from host/ subdirectory
+        cd host
+        log_info "Building simtrace2 host component..."
+        autoreconf -fi
+        export PKG_CONFIG_PATH="${INST_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}"
+        export LD_LIBRARY_PATH="${INST_DIR}/lib:${LD_LIBRARY_PATH}"
+        export PATH="${INST_DIR}/bin:${PATH}"
+        ./configure --prefix="${INST_DIR}"
+        make ${PARALLEL_MAKE}
+        make install
+        log_success "Built and installed: simtrace2"
+        cd "${BASE_DIR}"
+    fi
+    
+    log_success "Osmocom dependencies built successfully"
+}
+
+# Setup OpenWRT cross-compilation environment
+setup_openwrt_environment() {
+    # Check for OpenWRT SDK in submodule first, then fall back to environment variable
+    local sdk_path=""
+    
+    # Option 1: Check for git submodule (for nightly builds and version control)
+    if [ -d "${BASE_DIR}/openwrt-sdk" ] && [ -d "${BASE_DIR}/openwrt-sdk/staging_dir" ]; then
+        sdk_path="${BASE_DIR}/openwrt-sdk"
+        log_info "Using OpenWRT SDK from git submodule: $sdk_path"
+    # Option 2: Use environment variable
+    elif [ -n "$OPENWRT_SDK_PATH" ]; then
+        sdk_path="$OPENWRT_SDK_PATH"
+        log_info "Using OpenWRT SDK from OPENWRT_SDK_PATH: $sdk_path"
+    else
+        log_error "OpenWRT SDK not found!"
+        log_info ""
+        log_info "Option 1 - Use git submodule (recommended for automated builds):"
+        log_info "  git submodule add <sdk-repo-url> openwrt-sdk"
+        log_info "  git submodule update --init --recursive"
+        log_info ""
+        log_info "Option 2 - Download and set environment variable:"
+        log_info "  # Using OpenWrt SNAPSHOT r31338 for mediatek/filogic (ZBT Z8102AX V2)"
+        log_info "  wget https://downloads.openwrt.org/snapshots/targets/mediatek/filogic/openwrt-sdk-mediatek-filogic_gcc-13.3.0_musl.Linux-x86_64.tar.xz"
+        log_info "  tar xf openwrt-sdk-*.tar.xz"
+        log_info "  export OPENWRT_SDK_PATH=\$(pwd)/openwrt-sdk-*"
+        exit 1
+    fi
+    
+    if [ ! -d "$sdk_path" ]; then
+        log_error "OpenWRT SDK path does not exist: $sdk_path"
+        exit 1
+    fi
+    
+    log_info "Setting up OpenWRT cross-compilation environment..."
+    log_info "SDK Path: $sdk_path"
+    
+    # Find toolchain directory
+    local toolchain_dir=$(find "$sdk_path/staging_dir" -maxdepth 1 -name "toolchain-*" -type d | head -n 1)
+    local target_dir=$(find "$sdk_path/staging_dir" -maxdepth 1 -name "target-*" -type d | head -n 1)
+    
+    if [ -z "$toolchain_dir" ] || [ -z "$target_dir" ]; then
+        log_error "Could not find toolchain or target directory in OpenWRT SDK"
+        exit 1
+    fi
+    
+    log_info "Toolchain: $toolchain_dir"
+    log_info "Target: $target_dir"
+    
+    # Extract target architecture
+    local arch=$(basename "$target_dir" | sed 's/target-//' | cut -d'_' -f1)
+    
+    # Setup environment variables for cross-compilation
+    export PATH="${toolchain_dir}/bin:${PATH}"
+    export STAGING_DIR="${sdk_path}/staging_dir"
+    export PKG_CONFIG_PATH="${target_dir}/usr/lib/pkgconfig"
+    export CC="${arch}-openwrt-linux-gcc"
+    export CXX="${arch}-openwrt-linux-g++"
+    export AR="${arch}-openwrt-linux-ar"
+    export RANLIB="${arch}-openwrt-linux-ranlib"
+    
+    log_success "OpenWRT environment configured for: $arch"
+}
+
+# Build osmo-remsim
+build_osmo_remsim() {
+    log_info "Building osmo-remsim..."
+    
+    cd "${BASE_DIR}"
+    
+    # Setup PKG_CONFIG_PATH and LD_LIBRARY_PATH
+    # Only add deps/install paths if we built dependencies
+    if [ "$SKIP_DEPS" -eq 0 ] && [ -d "${INST_DIR}" ]; then
+        export PKG_CONFIG_PATH="${INST_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}"
+        export LD_LIBRARY_PATH="${INST_DIR}/lib:${LD_LIBRARY_PATH}"
+        export PATH="${INST_DIR}/bin:${PATH}"
+        log_info "Using dependencies from: ${INST_DIR}"
+    else
+        log_info "Using system or pre-installed dependencies"
+    fi
+    
+    # Run autoreconf if needed
+    if [ ! -f configure ]; then
+        log_info "Running autoreconf..."
+        autoreconf -fi
+    fi
+    
+    # Configure options
+    local configure_opts=""
+    
+    if [ "$BUILD_TYPE" = "client" ]; then
+        configure_opts="--disable-remsim-server --disable-remsim-bankd"
+        log_info "Building client-only configuration"
+    fi
+    
+    if [ "$OPENWRT_MODE" -eq 1 ]; then
+        # For OpenWRT, disable components that aren't needed
+        configure_opts="--disable-remsim-server --disable-remsim-bankd --disable-remsim-client-st2 --disable-remsim-client-ifdhandler"
+        log_info "Building for OpenWRT (client-openwrt only)"
+    fi
+    
+    if [ "$WITH_MANUALS" = "1" ]; then
+        configure_opts="$configure_opts --enable-manuals"
+    fi
+    
+    # Configure
+    log_info "Configuring osmo-remsim with options: $configure_opts"
+    if [ "$OPENWRT_MODE" -eq 1 ]; then
+        # Cross-compilation for OpenWRT
+        ./configure --host="${CC%-gcc}" $configure_opts
+    else
+        ./configure $configure_opts
+    fi
+    
+    # Build
+    log_info "Compiling osmo-remsim..."
+    make ${PARALLEL_MAKE}
+    
+    log_success "osmo-remsim built successfully!"
+}
+
+# Install osmo-remsim
+install_osmo_remsim() {
+    log_info "Installing osmo-remsim to $PREFIX..."
+    
+    cd "${BASE_DIR}"
+    
+    if [ "$PREFIX" = "/usr/local" ] || [ "$PREFIX" = "/usr" ]; then
+        if [ "$(id -u)" -ne 0 ]; then
+            log_error "Installation to $PREFIX requires root privileges"
+            log_info "Please run with sudo: sudo ./build.sh --install"
+            exit 1
+        fi
+    fi
+    
+    make install
+    
+    # Run ldconfig if installing to system directories
+    if [ "$PREFIX" = "/usr/local" ] || [ "$PREFIX" = "/usr" ]; then
+        log_info "Running ldconfig..."
+        ldconfig
+    fi
+    
+    log_success "osmo-remsim installed to $PREFIX"
+}
+
+# Show build summary
+show_summary() {
+    log_info "=========================================="
+    log_info "Build Summary"
+    log_info "=========================================="
+    log_info "Build Type: $BUILD_TYPE"
+    log_info "OpenWRT Mode: $OPENWRT_MODE"
+    log_info "Dependencies: ${DEPS_DIR}"
+    log_info "Install Prefix: ${INST_DIR}"
+    log_info "Parallel Jobs: $JOBS"
+    log_info "=========================================="
+    
+    if [ "$OPENWRT_MODE" -eq 0 ]; then
+        log_info "Built binaries are located in:"
+        log_info "  - src/server/osmo-remsim-server"
+        log_info "  - src/bankd/osmo-remsim-bankd"
+        log_info "  - src/client/osmo-remsim-client-*"
+    else
+        log_info "Built OpenWRT binary:"
+        log_info "  - src/client/osmo-remsim-client-openwrt"
+    fi
+    
+    if [ "$DO_INSTALL" -eq 0 ]; then
+        log_info ""
+        log_info "To install, run: ./build.sh --install"
+    fi
+    
+    log_info "=========================================="
+}
+
+# Main execution
+main() {
+    log_info "osmo-remsim Build Script"
+    log_info "========================"
+    log_info ""
+    
+    # Check for OpenWRT mode
+    if [ "$OPENWRT_MODE" -eq 1 ]; then
+        setup_openwrt_environment
+    else
+        # Install system dependencies only in normal mode
+        install_system_dependencies
+    fi
+    
+    # Build dependencies (unless skipped)
+    if [ "$SKIP_DEPS" -eq 0 ]; then
+        build_osmocom_dependencies
+    else
+        log_info "Skipping Osmocom dependency build (--skip-deps specified)"
+        log_info "Using system or pre-installed dependencies"
+    fi
+    
+    # Build osmo-remsim (unless deps-only mode)
+    if [ "$BUILD_TYPE" != "deps" ]; then
+        build_osmo_remsim
+    fi
+    
+    # Install if requested
+    if [ "$DO_INSTALL" -eq 1 ] && [ "$BUILD_TYPE" != "deps" ]; then
+        install_osmo_remsim
+    fi
+    
+    # Show summary
+    if [ "$BUILD_TYPE" != "deps" ]; then
+        show_summary
+    fi
+    
+    log_success "Build completed successfully!"
+}
+
+# Run main
+main

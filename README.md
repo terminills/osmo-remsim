@@ -40,6 +40,22 @@ Key features:
 - [LuCI Web Interface](doc/LUCI-WEB-INTERFACE.md) - Web-based configuration
 - [IonMesh Integration](doc/IONMESH-INTEGRATION.md) - Orchestrator setup
 
+Building from Source
+--------------------
+
+A comprehensive build script is provided that automatically downloads and builds all prerequisites:
+
+```bash
+# Build everything (recommended: client-only to avoid bankd code issues)
+./build.sh --client-only
+
+# Or for OpenWRT cross-compilation
+export OPENWRT_SDK_PATH=/path/to/openwrt-sdk
+./build.sh --openwrt
+```
+
+For detailed build instructions, see [BUILD.md](BUILD.md).
+
 Homepage
 --------
 Please visit the [official homepage](https://osmocom.org/projects/osmo-remsim/wiki)
