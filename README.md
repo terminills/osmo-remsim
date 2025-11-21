@@ -14,6 +14,22 @@ While originally designed to be used in context of cellular networks, there is n
 the system. It can therefore also be used with other systems that use contact based smart cards according to
 ISO 7816. Currently only the T=0 protocol with standard (non-extended) APDUs is supported.
 
+OpenWRT Integration
+-------------------
+
+osmo-remsim now includes **OpenWRT router integration** via the `osmo-remsim-client-openwrt` binary. This enables
+OpenWRT routers to bypass their local SIM slot and use remote SIM cards through the remsim-server infrastructure,
+including support for **KI (Authentication Key) proxy** functionality.
+
+Key features:
+- GPIO-based SIM slot bypass/switching
+- Direct integration with OpenWRT modem subsystem  
+- Remote SIM authentication with KI proxy support
+- Automatic modem device detection
+- Configurable hardware control via event scripts
+
+See [doc/OPENWRT-INTEGRATION.md](doc/OPENWRT-INTEGRATION.md) for detailed setup and usage instructions.
+
 Homepage
 --------
 Please visit the [official homepage](https://osmocom.org/projects/osmo-remsim/wiki)
