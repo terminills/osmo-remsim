@@ -345,6 +345,14 @@ build_dependency() {
     export LD_LIBRARY_PATH="${INST_DIR}/lib:${LD_LIBRARY_PATH}"
     export PATH="${INST_DIR}/bin:${PATH}"
     
+    # In OpenWRT mode, also add our install directory to CFLAGS/LDFLAGS
+    # so dependencies can find each other
+    if [ "$OPENWRT_MODE" -eq 1 ]; then
+        export CFLAGS="-I${INST_DIR}/include ${CFLAGS}"
+        export CPPFLAGS="-I${INST_DIR}/include ${CPPFLAGS}"
+        export LDFLAGS="-L${INST_DIR}/lib ${LDFLAGS}"
+    fi
+    
     # Add --host flag for cross-compilation in OpenWRT mode
     if [ "$OPENWRT_MODE" -eq 1 ]; then
         # Validate CC variable is set and follows expected pattern (*-gcc)
@@ -380,11 +388,17 @@ build_osmocom_dependencies() {
     mkdir -p "${INST_DIR}"
     
     # Build libosmocore
+    # In OpenWRT mode, use embedded and pseudotalloc options
+    local libosmocore_opts="--disable-doxygen"
+    if [ "$OPENWRT_MODE" -eq 1 ]; then
+        libosmocore_opts="$libosmocore_opts --enable-embedded --enable-pseudotalloc"
+        log_info "Using embedded build options for libosmocore (OpenWRT mode)"
+    fi
     build_dependency \
         "libosmocore" \
         "https://git.osmocom.org/libosmocore" \
         "master" \
-        "--disable-doxygen" \
+        "$libosmocore_opts" \
         "https://github.com/osmocom/libosmocore.git"
     
     # Build libosmo-netif
@@ -493,6 +507,11 @@ setup_openwrt_environment() {
     export CXX="${arch}-openwrt-linux-g++"
     export AR="${arch}-openwrt-linux-ar"
     export RANLIB="${arch}-openwrt-linux-ranlib"
+    
+    # Set CFLAGS and LDFLAGS to use OpenWRT SDK sysroot
+    export CFLAGS="-I${target_dir}/usr/include ${CFLAGS:-}"
+    export CPPFLAGS="-I${target_dir}/usr/include ${CPPFLAGS:-}"
+    export LDFLAGS="-L${target_dir}/usr/lib ${LDFLAGS:-}"
     
     log_success "OpenWRT environment configured for: $arch"
 }
