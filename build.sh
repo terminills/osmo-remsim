@@ -438,7 +438,19 @@ build_osmocom_dependencies() {
         export PKG_CONFIG_PATH="${INST_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}"
         export LD_LIBRARY_PATH="${INST_DIR}/lib:${LD_LIBRARY_PATH}"
         export PATH="${INST_DIR}/bin:${PATH}"
-        ./configure --prefix="${INST_DIR}"
+        
+        # Configure with cross-compilation support if needed
+        if [ "$OPENWRT_MODE" -eq 1 ]; then
+            # Add CFLAGS/LDFLAGS for OpenWRT cross-compilation
+            export CFLAGS="-I${INST_DIR}/include ${CFLAGS}"
+            export CPPFLAGS="-I${INST_DIR}/include ${CPPFLAGS}"
+            export LDFLAGS="-L${INST_DIR}/lib ${LDFLAGS}"
+            local host_triplet="${CC%-gcc}"
+            ./configure --host="$host_triplet" --prefix="${INST_DIR}"
+        else
+            ./configure --prefix="${INST_DIR}"
+        fi
+        
         make ${PARALLEL_MAKE}
         make install
         log_success "Built and installed: simtrace2"
