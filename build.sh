@@ -387,6 +387,18 @@ build_osmocom_dependencies() {
     
     mkdir -p "${INST_DIR}"
     
+    # Build talloc (required by libosmocore) when in OpenWRT mode
+    # In non-OpenWRT mode, use system talloc
+    if [ "$OPENWRT_MODE" -eq 1 ]; then
+        log_info "Building talloc for OpenWRT cross-compilation..."
+        build_dependency \
+            "talloc" \
+            "https://git.samba.org/talloc.git" \
+            "talloc-2.4.2" \
+            "" \
+            "https://github.com/samba-team/talloc.git"
+    fi
+    
     # Build libosmocore
     local libosmocore_opts="--disable-doxygen"
     build_dependency \
@@ -509,16 +521,17 @@ setup_openwrt_environment() {
     # Setup environment variables for cross-compilation
     export PATH="${toolchain_dir}/bin:${PATH}"
     export STAGING_DIR="${sdk_path}/staging_dir"
-    export PKG_CONFIG_PATH="${target_dir}/usr/lib/pkgconfig"
+    export PKG_CONFIG_PATH="${toolchain_dir}/usr/lib/pkgconfig:${target_dir}/usr/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
     export CC="${arch}-openwrt-linux-gcc"
     export CXX="${arch}-openwrt-linux-g++"
     export AR="${arch}-openwrt-linux-ar"
     export RANLIB="${arch}-openwrt-linux-ranlib"
     
     # Set CFLAGS and LDFLAGS to use OpenWRT SDK sysroot
-    export CFLAGS="-I${target_dir}/usr/include ${CFLAGS:-}"
-    export CPPFLAGS="-I${target_dir}/usr/include ${CPPFLAGS:-}"
-    export LDFLAGS="-L${target_dir}/usr/lib ${LDFLAGS:-}"
+    # Include both toolchain (build dependencies) and target (runtime) paths
+    export CFLAGS="-I${toolchain_dir}/usr/include -I${target_dir}/usr/include ${CFLAGS:-}"
+    export CPPFLAGS="-I${toolchain_dir}/usr/include -I${target_dir}/usr/include ${CPPFLAGS:-}"
+    export LDFLAGS="-L${toolchain_dir}/usr/lib -L${target_dir}/usr/lib ${LDFLAGS:-}"
     
     log_success "OpenWRT environment configured for: $arch"
 }
