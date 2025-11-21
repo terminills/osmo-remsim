@@ -43,6 +43,11 @@ src/server/osmo-remsim-server
 contrib/deps
 deps
 
+# OpenWRT SDK (unless added as submodule)
+# If you add openwrt-sdk as a git submodule, git will track it properly
+# Otherwise, this prevents accidental commit of large SDK downloads
+openwrt-sdk
+
 debian/tmp
 debian/osmo-remsim-*
 debian/libosmo-rspro0

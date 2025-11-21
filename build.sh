@@ -416,29 +416,42 @@ build_osmocom_dependencies() {
 
 # Setup OpenWRT cross-compilation environment
 setup_openwrt_environment() {
-    if [ -z "$OPENWRT_SDK_PATH" ]; then
-        log_error "OPENWRT_SDK_PATH environment variable not set!"
-        log_info "Please download and extract OpenWRT SDK, then set:"
-        log_info "  export OPENWRT_SDK_PATH=/path/to/openwrt-sdk"
+    # Check for OpenWRT SDK in submodule first, then fall back to environment variable
+    local sdk_path=""
+    
+    # Option 1: Check for git submodule (for nightly builds and version control)
+    if [ -d "${BASE_DIR}/openwrt-sdk" ] && [ -d "${BASE_DIR}/openwrt-sdk/staging_dir" ]; then
+        sdk_path="${BASE_DIR}/openwrt-sdk"
+        log_info "Using OpenWRT SDK from git submodule: $sdk_path"
+    # Option 2: Use environment variable
+    elif [ -n "$OPENWRT_SDK_PATH" ]; then
+        sdk_path="$OPENWRT_SDK_PATH"
+        log_info "Using OpenWRT SDK from OPENWRT_SDK_PATH: $sdk_path"
+    else
+        log_error "OpenWRT SDK not found!"
         log_info ""
-        log_info "Example for downloading SDK:"
+        log_info "Option 1 - Use git submodule (recommended for automated builds):"
+        log_info "  git submodule add <sdk-repo-url> openwrt-sdk"
+        log_info "  git submodule update --init --recursive"
+        log_info ""
+        log_info "Option 2 - Download and set environment variable:"
         log_info "  wget https://downloads.openwrt.org/releases/22.03.5/targets/ramips/mt7621/openwrt-sdk-22.03.5-ramips-mt7621_gcc-11.2.0_musl.Linux-x86_64.tar.xz"
         log_info "  tar xf openwrt-sdk-*.tar.xz"
         log_info "  export OPENWRT_SDK_PATH=\$(pwd)/openwrt-sdk-*"
         exit 1
     fi
     
-    if [ ! -d "$OPENWRT_SDK_PATH" ]; then
-        log_error "OpenWRT SDK path does not exist: $OPENWRT_SDK_PATH"
+    if [ ! -d "$sdk_path" ]; then
+        log_error "OpenWRT SDK path does not exist: $sdk_path"
         exit 1
     fi
     
     log_info "Setting up OpenWRT cross-compilation environment..."
-    log_info "SDK Path: $OPENWRT_SDK_PATH"
+    log_info "SDK Path: $sdk_path"
     
     # Find toolchain directory
-    local toolchain_dir=$(find "$OPENWRT_SDK_PATH/staging_dir" -maxdepth 1 -name "toolchain-*" -type d | head -n 1)
-    local target_dir=$(find "$OPENWRT_SDK_PATH/staging_dir" -maxdepth 1 -name "target-*" -type d | head -n 1)
+    local toolchain_dir=$(find "$sdk_path/staging_dir" -maxdepth 1 -name "toolchain-*" -type d | head -n 1)
+    local target_dir=$(find "$sdk_path/staging_dir" -maxdepth 1 -name "target-*" -type d | head -n 1)
     
     if [ -z "$toolchain_dir" ] || [ -z "$target_dir" ]; then
         log_error "Could not find toolchain or target directory in OpenWRT SDK"
@@ -453,7 +466,7 @@ setup_openwrt_environment() {
     
     # Setup environment variables for cross-compilation
     export PATH="${toolchain_dir}/bin:${PATH}"
-    export STAGING_DIR="${OPENWRT_SDK_PATH}/staging_dir"
+    export STAGING_DIR="${sdk_path}/staging_dir"
     export PKG_CONFIG_PATH="${target_dir}/usr/lib/pkgconfig"
     export CC="${arch}-openwrt-linux-gcc"
     export CXX="${arch}-openwrt-linux-g++"

@@ -67,7 +67,38 @@ JOBS=8 ./build.sh
 
 ### OpenWRT Cross-Compilation
 
-To build for OpenWRT routers:
+The build script supports two methods for OpenWRT SDK management:
+
+#### Method 1: Git Submodule (Recommended for Automated/Nightly Builds)
+
+Use this method when you need version-controlled, reproducible builds:
+
+```bash
+# 1. Add OpenWRT SDK as a git submodule (one-time setup)
+# Replace URL with your SDK repository or extracted SDK location
+git submodule add <your-openwrt-sdk-repo-url> openwrt-sdk
+
+# Or manually place/extract SDK in openwrt-sdk/ directory
+# wget https://downloads.openwrt.org/releases/22.03.5/targets/ramips/mt7621/openwrt-sdk-22.03.5-ramips-mt7621_gcc-11.2.0_musl.Linux-x86_64.tar.xz
+# tar xf openwrt-sdk-*.tar.xz
+# mv openwrt-sdk-* openwrt-sdk
+
+# 2. Initialize submodule (if using git submodule)
+git submodule update --init --recursive
+
+# 3. Build - script auto-detects the submodule
+./build.sh --openwrt
+```
+
+**Benefits of submodule approach:**
+- Version-controlled SDK version
+- Consistent builds across team/CI
+- Automatic SDK checkout with repository
+- Ideal for nightly/automated builds
+
+#### Method 2: Environment Variable (Flexible for Local Builds)
+
+Use this method for one-off builds or when switching SDK versions frequently:
 
 ```bash
 # 1. Download and extract OpenWRT SDK
@@ -78,6 +109,8 @@ tar xf openwrt-sdk-*.tar.xz
 export OPENWRT_SDK_PATH=$(pwd)/openwrt-sdk-*
 ./build.sh --openwrt
 ```
+
+**Note:** The script checks for `openwrt-sdk/` directory first (submodule), then falls back to `OPENWRT_SDK_PATH`.
 
 The built binary will be at: `src/client/osmo-remsim-client-openwrt`
 
