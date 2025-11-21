@@ -347,6 +347,16 @@ build_dependency() {
     
     # Add --host flag for cross-compilation in OpenWRT mode
     if [ "$OPENWRT_MODE" -eq 1 ]; then
+        # Validate CC variable is set and follows expected pattern
+        if [ -z "$CC" ]; then
+            log_error "CC environment variable is not set for cross-compilation"
+            exit 1
+        fi
+        if [[ ! "$CC" =~ -gcc$ ]]; then
+            log_error "CC variable does not follow expected pattern (*-gcc): $CC"
+            exit 1
+        fi
+        
         # Extract host triplet from CC variable (e.g., aarch64-openwrt-linux-gcc -> aarch64-openwrt-linux)
         local host_triplet="${CC%-gcc}"
         log_info "Cross-compiling for: $host_triplet"
