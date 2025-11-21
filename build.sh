@@ -387,6 +387,18 @@ build_osmocom_dependencies() {
     
     mkdir -p "${INST_DIR}"
     
+    # Build talloc (required by libosmocore) when in OpenWRT mode
+    # In non-OpenWRT mode, use system talloc
+    if [ "$OPENWRT_MODE" -eq 1 ]; then
+        log_info "Building talloc for OpenWRT cross-compilation..."
+        build_dependency \
+            "talloc" \
+            "https://git.samba.org/talloc.git" \
+            "master" \
+            "" \
+            "https://github.com/samba-team/talloc.git"
+    fi
+    
     # Build libosmocore
     local libosmocore_opts="--disable-doxygen"
     build_dependency \

@@ -313,7 +313,8 @@ Common issues:
 1. **SDK not found**: Ensure `OPENWRT_SDK_PATH` points to extracted SDK directory
 2. **Wrong architecture**: Download SDK matching your target hardware
 3. **Missing toolchain**: Ensure SDK includes `toolchain-*` directory in `staging_dir/`
-4. **Missing talloc or other headers**: The build script now automatically includes both toolchain and target include paths. If you still encounter "talloc.h: No such file or directory" errors, ensure your OpenWRT SDK includes the talloc package in the toolchain's staging directory
+
+**Note**: The build script automatically downloads and cross-compiles talloc as a dependency when building for OpenWRT, so you don't need to have it pre-installed in the SDK.
 
 ### bankd Build Failure
 
@@ -327,9 +328,10 @@ There's a known issue with duplicate case labels in `src/bankd/bankd_main.c`. If
 - **libosmocore** >= 1.11.0 - Core utilities library
 - **libosmo-netif** >= 1.6.0 - Networking library
 - **libosmo-simtrace2** >= 0.9.0 - SIMtrace2 support (for client-st2)
+- **talloc** - Hierarchical memory allocator (built from source for OpenWRT cross-compilation)
 
 ### System Libraries (installed by package manager)
-- **libtalloc** - Hierarchical memory allocator
+- **libtalloc** - Hierarchical memory allocator (used for native builds)
 - **libpcsclite** - PC/SC smart card library
 - **libusb-1.0** - USB device library
 - **libcsv** - CSV file handling (for bankd)
