@@ -435,8 +435,8 @@ setup_openwrt_environment() {
         log_info "  git submodule update --init --recursive"
         log_info ""
         log_info "Option 2 - Download and set environment variable:"
-        log_info "  # Using OpenWrt SNAPSHOT r31338 (current router version)"
-        log_info "  wget https://downloads.openwrt.org/snapshots/targets/ramips/mt7621/openwrt-sdk-ramips-mt7621_gcc-13.3.0_musl.Linux-x86_64.tar.xz"
+        log_info "  # Using OpenWrt SNAPSHOT r31338 for mediatek/filogic (ZBT Z8102AX V2)"
+        log_info "  wget https://downloads.openwrt.org/snapshots/targets/mediatek/filogic/openwrt-sdk-mediatek-filogic_gcc-13.3.0_musl.Linux-x86_64.tar.xz"
         log_info "  tar xf openwrt-sdk-*.tar.xz"
         log_info "  export OPENWRT_SDK_PATH=\$(pwd)/openwrt-sdk-*"
         exit 1
