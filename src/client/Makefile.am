@@ -56,4 +56,16 @@ osmo_remsim_client_st2_LDADD = $(top_builddir)/src/libosmo-rspro.la \
 			       $(NULL)
 endif
 
-noinst_HEADERS = client.h
+# OpenWRT client - always built
+bin_PROGRAMS += osmo-remsim-client-openwrt
+osmo_remsim_client_openwrt_SOURCES = user_openwrt.c ionmesh_integration.c remsim_client_main.c \
+				     remsim_client.c main_fsm.c ../rspro_client_fsm.c ../debug.c
+osmo_remsim_client_openwrt_CFLAGS = $(AM_CFLAGS)
+osmo_remsim_client_openwrt_LDADD = $(top_builddir)/src/libosmo-rspro.la \
+				   $(OSMONETIF_LIBS) \
+				   $(OSMOGSM_LIBS) \
+				   $(OSMOCORE_LIBS) \
+				   -lcurl \
+				   $(NULL)
+
+noinst_HEADERS = client.h ionmesh_integration.h

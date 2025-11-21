@@ -14,6 +14,32 @@ While originally designed to be used in context of cellular networks, there is n
 the system. It can therefore also be used with other systems that use contact based smart cards according to
 ISO 7816. Currently only the T=0 protocol with standard (non-extended) APDUs is supported.
 
+OpenWRT Integration
+-------------------
+
+osmo-remsim now includes **OpenWRT router integration** via the `osmo-remsim-client-openwrt` binary. This enables
+OpenWRT routers to bypass their local SIM slot and use remote SIM cards through the remsim-server infrastructure,
+including support for **KI (Authentication Key) proxy** functionality.
+
+Key features:
+- **Dual-Modem Support**: Fibocom FM350-GL (5G primary) + 850L (IoT heartbeat)
+- **LuCI Web Interface**: Password-protected configuration and monitoring
+- **IonMesh Orchestration**: Centralized SIM bank management
+- GPIO-based SIM slot bypass/switching
+- Direct integration with OpenWRT modem subsystem  
+- Remote SIM authentication with KI proxy support
+- Automatic modem device detection and failover
+- Configurable hardware control via event scripts
+
+**Quick Start**: See [doc/QUICKSTART-FIBOCOM.md](doc/QUICKSTART-FIBOCOM.md) for 15-minute setup guide
+
+**Documentation**:
+- [OpenWRT Integration Guide](doc/OPENWRT-INTEGRATION.md) - Complete integration guide
+- [Fibocom Modem Configuration](doc/FIBOCOM-MODEM-CONFIG.md) - FM350-GL & 850L setup
+- [Dual-Modem Setup](doc/DUAL-MODEM-SETUP.md) - Always-on connectivity architecture
+- [LuCI Web Interface](doc/LUCI-WEB-INTERFACE.md) - Web-based configuration
+- [IonMesh Integration](doc/IONMESH-INTEGRATION.md) - Orchestrator setup
+
 Homepage
 --------
 Please visit the [official homepage](https://osmocom.org/projects/osmo-remsim/wiki)
