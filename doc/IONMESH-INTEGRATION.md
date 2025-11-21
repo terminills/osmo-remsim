@@ -375,12 +375,15 @@ export IONMESH_MCC_MNC="310410"
 - Virtual SIM profiles
 - Best for: eSIM deployments
 
-### KI_PROXY_SWSIM (KI Proxy Mode) ⭐
-- Multiple virtual profiles per physical slot
-- Authentication proxy via IonMesh
-- KI keys never leave the bankd
+### KI_PROXY_SWSIM (KI Proxy Mode) ⭐ **NEW**
+- Multiple virtual profiles share a pool of physical slots (1-to-many round-robin)
+- Authentication proxy via IonMesh with carrier-specific slot pools
+- KI keys never leave the physical SIM cards in the bankd
+- Round-robin load balancing across slot pools (e.g., AT&T slots 1-50)
 - Best for: High-density deployments, security-sensitive environments
-- Supports up to 6000 virtual SIMs per physical slot
+- Supports up to 6000 virtual SIMs per physical slot pool
+- Per-carrier configuration (AT&T, Verizon, T-Mobile, etc.)
+- Physical card metadata stored as JSON in IonMesh
 
 ## Testing
 

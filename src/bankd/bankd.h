@@ -144,10 +144,17 @@ struct bankd {
 		/* KI Proxy configuration */
 		struct {
 			bool enabled;
-			unsigned int proxy_slot;
+			unsigned int proxy_slot;       /* Deprecated: single slot mode */
 			unsigned int carrier;
 			char *imsi;
 			char *iccid;
+			/* Multi-slot round-robin support - applies to ALL virtual slots */
+			unsigned int *proxy_slots;     /* Array of physical proxy slot numbers for round-robin */
+			unsigned int num_proxy_slots;  /* Number of physical slots in pool */
+			unsigned int next_slot_idx;    /* Round-robin index */
+			/* Virtual slot configuration */
+			unsigned int virtual_slot_start;  /* Start of virtual slot range (e.g., 900) */
+			unsigned int virtual_slot_end;    /* End of virtual slot range (e.g., 999) */
 		} ki_proxy;
 	} cfg;
 };

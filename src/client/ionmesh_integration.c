@@ -191,13 +191,13 @@ int ionmesh_parse_assignment(const char *json, struct ionmesh_assignment *assign
 		sscanf(ptr + 10, "%d", &assignment->bank_id);
 	}
 
-	/* Parse slot_id */
+	/* Parse slot_id - IonMesh tells us which slot to use (virtual or physical) */
 	ptr = strstr(json, "\"slot_id\":");
 	if (ptr) {
 		sscanf(ptr + 10, "%d", &assignment->slot_id);
 	}
 
-	/* Parse ICCID */
+	/* Parse ICCID - can be virtual or physical depending on mapping mode */
 	ptr = strstr(json, "\"iccid\":\"");
 	if (ptr) {
 		ptr += 9;
@@ -211,7 +211,7 @@ int ionmesh_parse_assignment(const char *json, struct ionmesh_assignment *assign
 		}
 	}
 
-	/* Parse IMSI */
+	/* Parse IMSI - can be virtual or physical depending on mapping mode */
 	ptr = strstr(json, "\"imsi\":\"");
 	if (ptr) {
 		ptr += 8;
