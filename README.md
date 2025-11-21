@@ -22,13 +22,23 @@ OpenWRT routers to bypass their local SIM slot and use remote SIM cards through 
 including support for **KI (Authentication Key) proxy** functionality.
 
 Key features:
+- **Dual-Modem Support**: Fibocom FM350-GL (5G primary) + 850L (IoT heartbeat)
+- **LuCI Web Interface**: Password-protected configuration and monitoring
+- **IonMesh Orchestration**: Centralized SIM bank management
 - GPIO-based SIM slot bypass/switching
 - Direct integration with OpenWRT modem subsystem  
 - Remote SIM authentication with KI proxy support
-- Automatic modem device detection
+- Automatic modem device detection and failover
 - Configurable hardware control via event scripts
 
-See [doc/OPENWRT-INTEGRATION.md](doc/OPENWRT-INTEGRATION.md) for detailed setup and usage instructions.
+**Quick Start**: See [doc/QUICKSTART-FIBOCOM.md](doc/QUICKSTART-FIBOCOM.md) for 15-minute setup guide
+
+**Documentation**:
+- [OpenWRT Integration Guide](doc/OPENWRT-INTEGRATION.md) - Complete integration guide
+- [Fibocom Modem Configuration](doc/FIBOCOM-MODEM-CONFIG.md) - FM350-GL & 850L setup
+- [Dual-Modem Setup](doc/DUAL-MODEM-SETUP.md) - Always-on connectivity architecture
+- [LuCI Web Interface](doc/LUCI-WEB-INTERFACE.md) - Web-based configuration
+- [IonMesh Integration](doc/IONMESH-INTEGRATION.md) - Orchestrator setup
 
 Homepage
 --------

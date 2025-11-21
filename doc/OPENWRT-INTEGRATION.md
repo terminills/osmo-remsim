@@ -44,9 +44,13 @@ The client requires two GPIO pins for basic operation:
 ### Supported Modems
 
 The client supports OpenWRT routers with:
+- **Fibocom FM350-GL** (5G, recommended for primary modem)
+- **Fibocom 850L** (LTE Cat-4, recommended for IoT modem)
 - Qualcomm QMI-based modems (e.g., `/dev/cdc-wdm0`)
 - Serial AT command modems (e.g., `/dev/ttyUSB2`)
 - Any modem with standard SIM interface
+
+**Recommended Configuration**: Fibocom FM350-GL + 850L dual-modem setup. See [FIBOCOM-MODEM-CONFIG.md](FIBOCOM-MODEM-CONFIG.md) for detailed setup.
 
 ## Installation
 

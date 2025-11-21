@@ -77,6 +77,8 @@ If the router loses connectivity temporarily:
 
 ### Typical Dual-Modem Router Layout
 
+**Reference Configuration: Fibocom FM350-GL + Fibocom 850L**
+
 ```
 ┌────────────────────────────────────────────────────┐
 │              OpenWRT Router                        │
@@ -85,21 +87,24 @@ If the router loses connectivity temporarily:
 │  │             CPU / SoC                       │  │
 │  └──┬──────────────────────────────────────┬───┘  │
 │     │                                      │      │
-│     │ USB/PCIe                    USB/PCIe │      │
+│     │ USB/PCIe                    USB      │      │
 │     │                                      │      │
 │  ┌──▼──────────────┐              ┌────────▼───┐  │
 │  │  Modem 1        │              │  Modem 2   │  │
-│  │  (EC25/EC20)    │              │  (EC25)    │  │
+│  │  Fibocom        │              │  Fibocom   │  │
+│  │  FM350-GL       │              │  850L      │  │
+│  │  (5G)           │              │  (LTE)     │  │
 │  │                 │              │            │  │
 │  │  /dev/ttyUSB2   │              │ /dev/ttyUSB5│ │
 │  │  /dev/cdc-wdm0  │              │/dev/cdc-wdm1││
+│  │  2cb7:0a05      │              │ 2cb7:01a0  │  │
 │  └────┬────────────┘              └──────┬──────┘  │
 │       │                                  │         │
 │    GPIO 20/21                        GPIO 22/23    │
 │       │                                  │         │
 │  ┌────▼────────────┐              ┌─────▼───────┐  │
 │  │  SIM Switch 1   │              │ SIM Switch 2│  │
-│  │  (Relay/Mux)    │              │ (Fixed)     │  │
+│  │  (ADG3304)      │              │ (Fixed)     │  │
 │  └────┬────────────┘              └─────┬───────┘  │
 │       │                                  │         │
 │   ┌───┴────┐                        ┌───┴───┐     │
@@ -110,6 +115,11 @@ If the router loses connectivity temporarily:
 │                                                    │
 └────────────────────────────────────────────────────┘
 ```
+
+**Modem Specifications:**
+- **FM350-GL**: 5G Sub-6GHz, USB 3.1, up to 4.67 Gbps
+- **850L**: LTE Cat-4, USB 2.0, up to 150 Mbps
+- See [FIBOCOM-MODEM-CONFIG.md](FIBOCOM-MODEM-CONFIG.md) for detailed setup
 
 ### GPIO Pin Mapping
 
@@ -229,7 +239,29 @@ config route
 
 ## Modem-Specific Setup
 
-### Quectel EC25/EC20 Modems
+### Fibocom FM350-GL + 850L (Recommended Configuration)
+
+```bash
+# Check modem presence
+lsusb | grep -i fibocom
+# Expected:
+# Bus 001 Device 003: ID 2cb7:0a05 Fibocom Wireless Inc. FM350-GL
+# Bus 001 Device 004: ID 2cb7:01a0 Fibocom Wireless Inc. 850L
+
+ls -la /dev/ttyUSB*
+# Should see: ttyUSB0-3 (FM350-GL), ttyUSB4-6 (850L)
+
+# FM350-GL: Configure for remote SIM
+echo "AT+GTUSBMODE=7" > /dev/ttyUSB2  # Enable QMI mode
+
+# 850L: Configure for always-on IoT
+echo "AT+CFUN=1" > /dev/ttyUSB5  # Enable radio
+echo "AT+CGDCONT=1,\"IP\",\"iot\"" > /dev/ttyUSB5  # Set IoT APN
+```
+
+**See [FIBOCOM-MODEM-CONFIG.md](FIBOCOM-MODEM-CONFIG.md) for complete Fibocom setup guide.**
+
+### Quectel EC25/EC20 Modems (Alternative)
 
 ```bash
 # Check modem presence
@@ -244,7 +276,7 @@ echo "AT+QCFG=\"usbnet\",0" > /dev/ttyUSB5
 echo "AT+CFUN=1" > /dev/ttyUSB5  # Enable radio
 ```
 
-### Sierra Wireless MC7455
+### Sierra Wireless MC7455 (Alternative)
 
 ```bash
 # Enable QMI interface
@@ -252,7 +284,7 @@ echo 'AT!ENTERCND="A710"' > /dev/ttyUSB2
 echo 'AT!USBCOMP=1,1,0000100D' > /dev/ttyUSB2
 ```
 
-### Huawei ME909s
+### Huawei ME909s (Alternative)
 
 ```bash
 # Set to NCM mode
