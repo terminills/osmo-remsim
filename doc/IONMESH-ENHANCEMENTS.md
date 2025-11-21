@@ -51,6 +51,11 @@ import uuid
 
 remsim_api_bp = Blueprint('remsim_api', __name__, url_prefix='/api/backend/v1/remsim')
 
+# NOTE: The helper functions (_find_available_slot, _log_audit, _log_slot_health) 
+# are currently defined in the existing app/routes/api/remsim_api.py.
+# Consider refactoring these to app/utils/remsim_utils.py for better code organization
+# and to avoid circular dependency issues.
+
 @remsim_api_bp.route('/register-client', methods=['POST'])
 def register_remsim_client():
     """
@@ -135,6 +140,8 @@ def register_remsim_client():
         }), 200
     
     # Find available slot using existing function
+    # Note: These helper functions should be in a shared utilities module
+    # For now, import from current module (will be refactored)
     from app.routes.api.remsim_api import _find_available_slot, _log_audit
     
     slot_assignment = _find_available_slot(
@@ -293,6 +300,7 @@ def remsim_client_heartbeat():
     if slot:
         # Log health events if status changed
         if slot.health_status != client_status:
+            # Note: Consider moving _log_slot_health to utils module
             from app.routes.api.remsim_api import _log_slot_health
             _log_slot_health(
                 slot.id,
@@ -364,6 +372,7 @@ def unregister_remsim_client(client_id):
     db.session.commit()
     
     # Log audit
+    # Note: Consider moving _log_audit to utils module
     from app.routes.api.remsim_api import _log_audit
     _log_audit("unregister_client", "service_profile", str(profile.profile_id),
                profile.tenant_id, {"client_id": client_id})
@@ -685,6 +694,7 @@ def reassign_slot(client_id):
     db.session.commit()
     
     # Log audit
+    # Note: Consider moving _log_audit to utils module
     from app.routes.api.remsim_api import _log_audit
     _log_audit("reassign_slot", "service_profile", str(profile.profile_id),
                profile.tenant_id, {

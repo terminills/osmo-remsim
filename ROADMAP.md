@@ -996,7 +996,7 @@ See: [doc/features/Q3-DEPLOYMENT-TOOLS.md](doc/features/Q3-DEPLOYMENT-TOOLS.md)
 |---------|----------|--------|--------|--------------|---|
 | Web UI Enhancements | HIGH | 2-3w | HIGH | None | Q1 |
 | Modem Support | HIGH | 3-4w | HIGH | None | Q1 |
-| Prometheus Metrics | HIGH | 1-2w | MEDIUM | None | Q1 |
+| Prometheus Metrics | HIGH | 1-2w | HIGH | None | Q1 |
 | Mobile App | MEDIUM | 4-6w | MEDIUM | None | Q1 |
 | eSIM Management | HIGH | 5-6w | HIGH | Modem Support | Q2 |
 | Multi-SIM Support | MEDIUM | 4-5w | MEDIUM | Modem Support | Q2 |

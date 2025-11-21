@@ -620,12 +620,12 @@ osmo-remsim-client-openwrt -V 20 -P 21 -d DMAIN:DPCU
 
 ## Success Criteria
 
-- [x] Support for top 3 Sierra Wireless LTE/5G modems
-- [x] Support for top 3 Quectel LTE/5G modems
-- [x] Auto-detection of all supported modems
-- [x] 95%+ test pass rate across all models
-- [x] Documentation for each supported modem
-- [x] Community testing and validation
+- [ ] Support for top 3 Sierra Wireless LTE/5G modems
+- [ ] Support for top 3 Quectel LTE/5G modems
+- [ ] Auto-detection of all supported modems
+- [ ] 95%+ test pass rate across all models
+- [ ] Documentation for each supported modem
+- [ ] Community testing and validation
 - [ ] Zero regression in existing Fibocom support
 
 ---
