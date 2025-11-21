@@ -345,7 +345,16 @@ build_dependency() {
     export LD_LIBRARY_PATH="${INST_DIR}/lib:${LD_LIBRARY_PATH}"
     export PATH="${INST_DIR}/bin:${PATH}"
     
-    ./configure --prefix="${INST_DIR}" $configure_opts
+    # Add --host flag for cross-compilation in OpenWRT mode
+    if [ "$OPENWRT_MODE" -eq 1 ]; then
+        # Extract host triplet from CC variable (e.g., aarch64-openwrt-linux-gcc -> aarch64-openwrt-linux)
+        local host_triplet="${CC%-gcc}"
+        log_info "Cross-compiling for: $host_triplet"
+        ./configure --host="$host_triplet" --prefix="${INST_DIR}" $configure_opts
+    else
+        ./configure --prefix="${INST_DIR}" $configure_opts
+    fi
+    
     make ${PARALLEL_MAKE}
     make install
     
