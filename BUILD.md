@@ -313,6 +313,7 @@ Common issues:
 1. **SDK not found**: Ensure `OPENWRT_SDK_PATH` points to extracted SDK directory
 2. **Wrong architecture**: Download SDK matching your target hardware
 3. **Missing toolchain**: Ensure SDK includes `toolchain-*` directory in `staging_dir/`
+4. **Missing talloc or other headers**: The build script now automatically includes both toolchain and target include paths. If you still encounter "talloc.h: No such file or directory" errors, ensure your OpenWRT SDK includes the talloc package in the toolchain's staging directory
 
 ### bankd Build Failure
 

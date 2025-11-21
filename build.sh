@@ -509,16 +509,17 @@ setup_openwrt_environment() {
     # Setup environment variables for cross-compilation
     export PATH="${toolchain_dir}/bin:${PATH}"
     export STAGING_DIR="${sdk_path}/staging_dir"
-    export PKG_CONFIG_PATH="${target_dir}/usr/lib/pkgconfig"
+    export PKG_CONFIG_PATH="${toolchain_dir}/usr/lib/pkgconfig:${target_dir}/usr/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
     export CC="${arch}-openwrt-linux-gcc"
     export CXX="${arch}-openwrt-linux-g++"
     export AR="${arch}-openwrt-linux-ar"
     export RANLIB="${arch}-openwrt-linux-ranlib"
     
     # Set CFLAGS and LDFLAGS to use OpenWRT SDK sysroot
-    export CFLAGS="-I${target_dir}/usr/include ${CFLAGS:-}"
-    export CPPFLAGS="-I${target_dir}/usr/include ${CPPFLAGS:-}"
-    export LDFLAGS="-L${target_dir}/usr/lib ${LDFLAGS:-}"
+    # Include both toolchain (build dependencies) and target (runtime) paths
+    export CFLAGS="-I${toolchain_dir}/usr/include -I${target_dir}/usr/include ${CFLAGS:-}"
+    export CPPFLAGS="-I${toolchain_dir}/usr/include -I${target_dir}/usr/include ${CPPFLAGS:-}"
+    export LDFLAGS="-L${toolchain_dir}/usr/lib -L${target_dir}/usr/lib ${LDFLAGS:-}"
     
     log_success "OpenWRT environment configured for: $arch"
 }
