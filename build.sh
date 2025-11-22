@@ -441,7 +441,8 @@ build_talloc() {
         local host_triplet="${CC%-gcc}"
         # Extract architecture - first field of triplet (e.g., aarch64-openwrt-linux -> aarch64)
         # This works for standard GNU triplets (arch-vendor-os or arch-os)
-        local arch=$(echo "$host_triplet" | cut -d'-' -f1)
+        local arch
+        arch=$(echo "$host_triplet" | cut -d'-' -f1)
         log_info "Cross-compiling talloc for: $host_triplet (architecture: $arch)"
         
         # Create cross-answers cache file for waf cross-compilation
@@ -506,8 +507,9 @@ EOF
         fi
         
         log_info "Running waf build..."
-        # Note: waf doesn't use -j flag, pass PARALLEL_MAKE as-is (e.g., "-j4")
-        if ! "$waf_bin" build "${PARALLEL_MAKE}"; then
+        # Waf uses the JOBS environment variable for parallel builds, not make-style -j flags
+        # Set JOBS based on the number of CPUs (already set at script start)
+        if ! "$waf_bin" build; then
             log_error "Waf build failed for talloc"
             exit 1
         fi
