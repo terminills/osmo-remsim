@@ -8,6 +8,8 @@ This directory contains patches that are automatically applied to external depen
 patches/
 ├── libosmocore/
 │   └── 0001-make-sctp-include-conditional.patch
+├── libosmo-netif/
+│   └── 0001-fix-openwrt-compatibility.patch
 └── <dependency-name>/
     └── <patch-files>.patch
 ```
@@ -46,6 +48,16 @@ git diff > /path/to/osmo-remsim/patches/libosmocore/0001-my-patch.patch
 - **Details**: Makes the SCTP header include conditional on `HAVE_LIBSCTP` being defined
 - **Affects**: `src/core/osmo_io_internal.h` and `src/core/osmo_io_uring.c`
 - **When applied**: Always (harmless on systems with SCTP support)
+
+### libosmo-netif
+
+#### 0001-fix-openwrt-compatibility.patch
+- **Purpose**: Fix OpenWRT build issues - deprecated header warnings and missing SCTP support
+- **Details**: 
+  1. Replaces deprecated `<sys/fcntl.h>` with POSIX-standard `<fcntl.h>` in source files
+  2. Makes SCTP header includes conditional on `HAVE_LIBSCTP` being defined
+- **Affects**: `src/datagram.c`, `src/stream_cli.c`, `src/stream.c`, `src/stream_srv.c`, `include/osmocom/netif/sctp.h`
+- **When applied**: Always (eliminates warnings and build failures on OpenWRT with --disable-libsctp)
 
 ## Notes
 
