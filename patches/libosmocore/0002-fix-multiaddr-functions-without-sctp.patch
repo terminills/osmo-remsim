@@ -45,7 +45,7 @@ socket operations remain conditional.
  
  /*! Format multiple IP addresses and/or port number into a combined string buffer
   *  \param[out] str  Destination string buffer.
-@@ -2040,10 +2049,12 @@ int osmo_sock_multiaddr_get_name_buf(char *str, size_t str_len, int fd, int sk_
+@@ -2040,10 +2049,16 @@ int osmo_sock_multiaddr_get_name_buf(char *str, size_t str_len, int fd, int sk_
  		return sb.chars_needed;
  	}
  
@@ -53,11 +53,15 @@ socket operations remain conditional.
  	switch (sk_proto) {
  	case IPPROTO_SCTP:
  		break; /* continue below */
--	default:
-+#endif
-+	default:  /* Also handles non-SCTP when SCTP is disabled */
+ 	default:
  		return osmo_sock_get_name_buf(str, str_len, fd);
  	}
++#else
++	/* When SCTP is disabled, fall back to single-address function for all protocols */
++	(void)sk_proto; /* Suppress unused parameter warning */
++	return osmo_sock_get_name_buf(str, str_len, fd);
++#endif
+ 
  
 @@ -2162,9 +2173,8 @@ int osmo_sock_multiaddr_get_name_buf(char *str, size_t str_len, int fd, int sk_
  	}
