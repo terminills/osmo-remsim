@@ -63,11 +63,19 @@ Options:
   --jobs N            Number of parallel build jobs
 
 Environment Variables:
-  OPENWRT_SDK_PATH    Path to OpenWrt SDK (required if --sdk not specified)
+  OPENWRT_SDK_PATH    Path to OpenWrt SDK (required if --sdk not specified and no git submodule)
   BUILD_JOBS          Number of parallel jobs (default: auto-detect)
 
+SDK Detection (in order):
+  1. Git submodule: checks for openwrt-sdk/ directory in repository root
+  2. Environment variable: OPENWRT_SDK_PATH
+  3. Command line option: --sdk PATH
+
 Examples:
-  # Build all packages
+  # Build all packages (auto-detect SDK from git submodule or environment)
+  ./build-ipk.sh
+
+  # Build all packages with explicit SDK path
   ./build-ipk.sh --sdk /path/to/openwrt-sdk
 
   # Build only client package with verbose output
@@ -75,6 +83,11 @@ Examples:
 
   # Using environment variable
   export OPENWRT_SDK_PATH=/path/to/openwrt-sdk
+  ./build-ipk.sh
+
+  # Using git submodule (recommended for automated builds)
+  git submodule add <sdk-repo-url> openwrt-sdk
+  git submodule update --init --recursive
   ./build-ipk.sh
 
 EOF
@@ -121,11 +134,30 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Validate SDK path
+# Validate SDK path - check for git submodule first, then environment variable
+# This mirrors the logic in build.sh for consistency
 if [ -z "$OPENWRT_SDK_PATH" ]; then
-    log_error "OpenWrt SDK path not specified"
-    echo "Set OPENWRT_SDK_PATH environment variable or use --sdk option"
-    exit 1
+    # Option 1: Check for git submodule (for nightly builds and version control)
+    if [ -d "${REPO_ROOT}/openwrt-sdk" ] && [ -d "${REPO_ROOT}/openwrt-sdk/staging_dir" ]; then
+        OPENWRT_SDK_PATH="${REPO_ROOT}/openwrt-sdk"
+        log_info "Using OpenWrt SDK from git submodule: $OPENWRT_SDK_PATH"
+    else
+        log_error "OpenWrt SDK not found!"
+        log_info ""
+        log_info "Option 1 - Use git submodule (recommended for automated builds):"
+        log_info "  git submodule add <sdk-repo-url> openwrt-sdk"
+        log_info "  git submodule update --init --recursive"
+        log_info ""
+        log_info "Option 2 - Download and set environment variable:"
+        log_info "  # Download OpenWrt SDK for your target architecture"
+        log_info "  wget https://downloads.openwrt.org/snapshots/targets/<target>/<subtarget>/openwrt-sdk-*.tar.xz"
+        log_info "  tar xf openwrt-sdk-*.tar.xz"
+        log_info "  export OPENWRT_SDK_PATH=\$(pwd)/openwrt-sdk-*"
+        log_info ""
+        log_info "Option 3 - Use --sdk command line option:"
+        log_info "  ./build-ipk.sh --sdk /path/to/openwrt-sdk"
+        exit 1
+    fi
 fi
 
 if [ ! -d "$OPENWRT_SDK_PATH" ]; then
