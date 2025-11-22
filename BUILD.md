@@ -332,8 +332,9 @@ OpenWRT environments have a minimal set of libraries and headers compared to ful
   - `--disable-libmnl` - Netlink library support
   - `--disable-uring` - io_uring async I/O support
   - `--disable-gnutls` - GnuTLS library (used as getrandom() fallback in libosmocore)
+  - `--disable-pcsc` - PC/SC smart card reader support (libpcsclite)
 - A patch is automatically applied to libosmocore to make the `netinet/sctp.h` include conditional (see `patches/libosmocore/0001-make-sctp-include-conditional.patch`)
-- This prevents build failures due to missing header files in the OpenWRT SDK
+- This prevents build failures due to missing header files or libraries in the OpenWRT SDK
 - These features are not required for the osmo-remsim client functionality on OpenWRT routers
 
 The patch mechanism in the build script:
