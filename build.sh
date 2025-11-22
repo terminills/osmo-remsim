@@ -439,8 +439,10 @@ build_talloc() {
         
         # Extract host triplet and architecture from CC variable
         local host_triplet="${CC%-gcc}"
+        # Extract architecture - first field of triplet (e.g., aarch64-openwrt-linux -> aarch64)
+        # This works for standard GNU triplets (arch-vendor-os or arch-os)
         local arch=$(echo "$host_triplet" | cut -d'-' -f1)
-        log_info "Cross-compiling talloc for: $host_triplet"
+        log_info "Cross-compiling talloc for: $host_triplet (architecture: $arch)"
         
         # Create cross-answers cache file for waf cross-compilation
         # Based on OpenWRT's libtalloc package: https://github.com/openwrt/packages/blob/master/libs/libtalloc/Makefile
@@ -474,14 +476,18 @@ Checking uname version type: "#1 SMP"
 EOF
         
         # Use waf directly for cross-compilation (talloc uses waf build system, not autoconf)
-        # The waf executable is located in the Samba repository's buildtools directory
+        # The waf executable is in the Samba repository at buildtools/bin/waf
+        # This path is relative to lib/talloc/ where we are currently located
         local waf_bin="../../buildtools/bin/waf"
         if [ ! -x "$waf_bin" ]; then
             log_error "Waf executable not found at $waf_bin"
-            log_error "This should not happen with talloc 2.4.2 from Samba repository"
+            log_error "Expected location for talloc 2.4.2 from Samba repository"
+            log_error "Current directory: $(pwd)"
             exit 1
         fi
         
+        # Set PYTHONHASHSEED for reproducible builds
+        # Waf uses Python and this ensures deterministic ordering of hash-based operations
         export PYTHONHASHSEED=1
         "$waf_bin" configure \
             --prefix="${INST_DIR}" \
