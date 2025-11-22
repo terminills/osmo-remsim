@@ -1,0 +1,119 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2024 OpenWrt
+
+START=95
+STOP=10
+
+USE_PROCD=1
+PROG=/usr/bin/osmo-remsim-client-openwrt
+
+start_service() {
+	local enabled
+	local client_id client_slot
+	local server_host server_port atr atr_ignore_rspro
+	local dual_modem
+	local ionmesh_enabled
+	local debug log_categories
+	local event_script keep_running
+	
+	config_load remsim
+	
+	# Check if service is enabled
+	config_get enabled service enabled 0
+	[ "$enabled" = "1" ] || return 0
+	
+	# Load client configuration
+	config_get client_id client client_id ""
+	config_get client_slot client client_slot "0"
+	
+	# Load server configuration
+	config_get server_host server host "127.0.0.1"
+	config_get server_port server port "9998"
+	config_get atr server atr ""
+	config_get atr_ignore_rspro server atr_ignore_rspro "0"
+	
+	# Load modem configuration
+	config_get dual_modem modems dual_modem "0"
+	
+	# Load IonMesh configuration
+	config_get ionmesh_enabled ionmesh enabled "0"
+	config_get ionmesh_host ionmesh host ""
+	config_get ionmesh_port ionmesh port "5000"
+	config_get ionmesh_tenant ionmesh tenant_id "1"
+	config_get ionmesh_mode ionmesh mapping_mode "ONE_TO_ONE_SWSIM"
+	config_get ionmesh_mcc_mnc ionmesh mcc_mnc ""
+	
+	# Load logging configuration
+	config_get debug logging debug "0"
+	config_get log_categories logging log_categories ""
+	
+	# Load advanced configuration
+	config_get event_script advanced event_script ""
+	config_get keep_running advanced keep_running "1"
+	
+	# Build command line arguments
+	local args=""
+	
+	# Server connection
+	args="$args -i $server_host"
+	args="$args -p $server_port"
+	
+	# Client identification
+	[ -n "$client_id" ] && args="$args -c $client_id"
+	[ -n "$client_slot" ] && args="$args -n $client_slot"
+	
+	# ATR configuration
+	[ -n "$atr" ] && args="$args -a $atr"
+	[ "$atr_ignore_rspro" = "1" ] && args="$args -r"
+	
+	# Event script
+	[ -n "$event_script" ] && args="$args -e $event_script"
+	
+	# Debug logging
+	if [ "$debug" = "1" ] && [ -n "$log_categories" ]; then
+		args="$args -d $log_categories"
+	fi
+	
+	# Build environment variables
+	procd_open_instance
+	procd_set_param command $PROG $args
+	procd_set_param respawn
+	procd_set_param stdout 1
+	procd_set_param stderr 1
+	
+	# Set environment variables
+	if [ "$dual_modem" = "1" ]; then
+		procd_set_param env OPENWRT_DUAL_MODEM=1
+		
+		# Modem 1 configuration
+		config_get m1_dev modem1 device ""
+		config_get m1_sim modem1 sim_switch_gpio "20"
+		config_get m1_rst modem1 reset_gpio "21"
+		[ -n "$m1_dev" ] && procd_append_param env MODEM1_DEVICE="$m1_dev"
+		procd_append_param env MODEM1_SIM_GPIO="$m1_sim"
+		procd_append_param env MODEM1_RESET_GPIO="$m1_rst"
+		
+		# Modem 2 configuration
+		config_get m2_dev modem2 device ""
+		config_get m2_sim modem2 sim_switch_gpio "22"
+		config_get m2_rst modem2 reset_gpio "23"
+		[ -n "$m2_dev" ] && procd_append_param env MODEM2_DEVICE="$m2_dev"
+		procd_append_param env MODEM2_SIM_GPIO="$m2_sim"
+		procd_append_param env MODEM2_RESET_GPIO="$m2_rst"
+	fi
+	
+	# IonMesh environment variables
+	if [ "$ionmesh_enabled" = "1" ]; then
+		[ -n "$ionmesh_host" ] && procd_append_param env IONMESH_HOST="$ionmesh_host"
+		procd_append_param env IONMESH_PORT="$ionmesh_port"
+		procd_append_param env IONMESH_TENANT_ID="$ionmesh_tenant"
+		procd_append_param env IONMESH_MAPPING_MODE="$ionmesh_mode"
+		[ -n "$ionmesh_mcc_mnc" ] && procd_append_param env IONMESH_MCC_MNC="$ionmesh_mcc_mnc"
+	fi
+	
+	procd_close_instance
+}
+
+service_triggers() {
+	procd_add_reload_trigger "remsim"
+}
