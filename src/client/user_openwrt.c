@@ -36,7 +36,9 @@
 
 #include "client.h"
 #include "debug.h"
+#ifdef ENABLE_IONMESH
 #include "ionmesh_integration.h"
+#endif
 
 /* OpenWRT GPIO control paths */
 #define GPIO_EXPORT_PATH "/sys/class/gpio/export"
@@ -95,10 +97,12 @@ struct openwrt_state {
 	uint8_t atr_buf[ATR_SIZE_MAX];
 	uint8_t atr_len;
 	
+#ifdef ENABLE_IONMESH
 	/* IonMesh orchestration */
 	struct ionmesh_config *ionmesh_cfg;
 	struct ionmesh_assignment ionmesh_assignment;
 	bool use_ionmesh;
+#endif
 	
 	/* Modem communication */
 	struct osmo_fd modem_ofd;
@@ -106,6 +110,9 @@ struct openwrt_state {
 };
 
 static struct openwrt_state *g_openwrt_state = NULL;
+
+/* Forward declarations */
+static int openwrt_send_tpdu_to_modem(struct openwrt_state *os, const uint8_t *data, size_t len);
 
 /***********************************************************************
  * GPIO Control Functions
@@ -788,6 +795,7 @@ int client_user_main(struct bankd_client *g_client)
 
 	openwrt_init_modem(os);
 
+#ifdef ENABLE_IONMESH
 	/* Check if IonMesh orchestration is enabled */
 	if (g_client->cfg->event_script && strstr(g_client->cfg->event_script, "ionmesh")) {
 		os->use_ionmesh = true;
@@ -864,6 +872,7 @@ int client_user_main(struct bankd_client *g_client)
 						 os->ionmesh_assignment.slot_id);
 		}
 	}
+#endif
 
 	LOGP(DMAIN, LOGL_INFO, "OpenWRT client initialized (GPIO SIM: %d, GPIO Reset: %d)\n",
 	     os->sim_switch_gpio, os->modem_reset_gpio);
@@ -873,11 +882,13 @@ int client_user_main(struct bankd_client *g_client)
 		osmo_select_main(0);
 	}
 
+#ifdef ENABLE_IONMESH
 	/* Cleanup: Unregister from IonMesh */
 	if (os->use_ionmesh && os->ionmesh_cfg) {
 		ionmesh_unregister_client(os->ionmesh_cfg);
 		ionmesh_config_free(os->ionmesh_cfg);
 	}
+#endif
 
 	return 0;
 }
