@@ -37,7 +37,7 @@ backward compatibility.
  
 +AC_ARG_ENABLE([examples],
 +	[AS_HELP_STRING([--disable-examples],
-+		[Disable building example programs (default: enabled)])],
++		[Disable building examples and utils directories (default: enabled)])],
 +	[enable_examples=$enableval],
 +	[enable_examples=yes])
 +AM_CONDITIONAL(ENABLE_EXAMPLES, test "x$enable_examples" = "xyes")
