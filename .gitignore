@@ -60,3 +60,5 @@ debian/debhelper*
 debian/files
 
 contrib/osmo-remsim.spec
+openwrt-sdk*
+*.tar.xz

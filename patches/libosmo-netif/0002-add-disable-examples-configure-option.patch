@@ -2,17 +2,17 @@ From: osmo-remsim build script <build@osmo-remsim>
 Subject: Add --disable-examples configure option
 
 Add a configure option to optionally disable building the examples
-directory. This is useful for:
-1. Cross-compilation scenarios where examples may have linking issues
-2. Embedded/OpenWRT builds where examples are not needed
+and utils directories. This is useful for:
+1. Cross-compilation scenarios where examples/utils may have linking issues
+2. Embedded/OpenWRT builds where examples/utils are not needed
 3. Faster builds when only the library is required
 
-The examples directory is still built by default to maintain backward
-compatibility.
+The examples and utils directories are still built by default to maintain
+backward compatibility.
 
 --- a/Makefile.am
 +++ b/Makefile.am
-@@ -1,7 +1,11 @@
+@@ -1,7 +1,15 @@
  AUTOMAKE_OPTIONS = foreign dist-bzip2 1.6
  ACLOCAL_AMFLAGS = -I m4
  
@@ -21,7 +21,11 @@ compatibility.
 +EXAMPLES_DIR = examples
 +endif
 +
-+SUBDIRS = include src $(EXAMPLES_DIR) utils tests
++if ENABLE_EXAMPLES
++UTILS_DIR = utils
++endif
++
++SUBDIRS = include src $(EXAMPLES_DIR) $(UTILS_DIR) tests
  
  pkgconfigdir = $(libdir)/pkgconfig
  pkgconfig_DATA = libosmo-netif.pc
