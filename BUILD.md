@@ -324,6 +324,13 @@ Talloc uses the Waf build system (not autoconf), which requires special handling
 - Python support is disabled (`--disable-python`) to avoid Python cross-compilation complexity
 - This approach is based on the [official OpenWRT libtalloc package](https://github.com/openwrt/packages/blob/master/libs/libtalloc/Makefile)
 
+#### Technical Details: SCTP Support in OpenWRT
+
+OpenWRT environments typically do not include SCTP (Stream Control Transmission Protocol) support by default. The build script automatically handles this:
+- When building for OpenWRT (`--openwrt` flag), the script adds `--disable-libsctp` to libosmocore and libosmo-netif configure options
+- This prevents build failures due to missing `netinet/sctp.h` header file
+- SCTP-related features in these libraries will be unavailable, but they are not required for the osmo-remsim client functionality
+
 ### bankd Build Failure
 
 There's a known issue with duplicate case labels in `src/bankd/bankd_main.c`. If you encounter this:
