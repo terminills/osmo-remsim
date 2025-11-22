@@ -437,16 +437,55 @@ build_talloc() {
             exit 1
         fi
         
-        # Extract host triplet from CC variable
+        # Extract host triplet and architecture from CC variable
         local host_triplet="${CC%-gcc}"
+        local arch=$(echo "$host_triplet" | cut -d'-' -f1)
         log_info "Cross-compiling talloc for: $host_triplet"
-        ./configure --host="$host_triplet" --prefix="${INST_DIR}"
+        
+        # Create cross-answers cache file for waf
+        # Based on OpenWRT's libtalloc package approach
+        cat > cache.txt << 'EOF'
+Checking simple C program: "hello world"
+rpath library support: (127, "")
+-Wl,--version-script support: (127, "")
+Checking getconf LFS_CFLAGS: NO
+Checking for large file support without additional flags: OK
+Checking correct behavior of strtoll: OK
+Checking for working strptime: NO
+Checking for C99 vsnprintf: "1"
+Checking for HAVE_SHARED_MMAP: NO
+Checking for HAVE_MREMAP: NO
+Checking for HAVE_INCOHERENT_MMAP: (2, "")
+Checking for HAVE_SECURE_MKSTEMP: OK
+EOF
+        
+        # Add uname information specific to target
+        cat >> cache.txt << EOF
+Checking uname machine type: "${arch}"
+Checking uname release type: "5.10.0"
+Checking uname sysname type: "Linux"
+Checking uname version type: "#1 SMP"
+EOF
+        
+        # Use waf directly for cross-compilation
+        # talloc uses waf build system, not autoconf
+        export PYTHONHASHSEED=1
+        ../../buildtools/bin/waf configure \
+            --prefix="${INST_DIR}" \
+            --cross-compile \
+            --cross-answers=cache.txt \
+            --disable-python \
+            --disable-rpath \
+            --disable-rpath-install
+        
+        ../../buildtools/bin/waf build ${PARALLEL_MAKE}
+        ../../buildtools/bin/waf install
     else
+        # Native build - use standard configure wrapper
         ./configure --prefix="${INST_DIR}"
+        make ${PARALLEL_MAKE}
+        make install
     fi
-    
-    make ${PARALLEL_MAKE}
-    make install
     
     log_success "Built and installed: talloc ${version}"
     cd "${BASE_DIR}"
