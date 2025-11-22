@@ -59,12 +59,12 @@ socket operations remain conditional.
  		return osmo_sock_get_name_buf(str, str_len, fd);
  	}
  
-@@ -2162,9 +2173,7 @@ int osmo_sock_multiaddr_get_name_buf(char *str, size_t str_len, int fd, int sk_
+@@ -2162,9 +2173,8 @@ int osmo_sock_multiaddr_get_name_buf(char *str, size_t str_len, int fd, int sk_
  	}
  
  	return sb.chars_needed;
-+}
+ }
 -#endif
  
  /*! Get address/port information on socket in provided string buffer, like "r=1.2.3.4:5<->l=6.7.8.9:10".
-- * This does not include braces like osmo_sock_get_name().
+  * This does not include braces like osmo_sock_get_name().
