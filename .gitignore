@@ -27,6 +27,9 @@ missing
 Makefile.in
 Makefile
 Makefile.am.sample
+
+# But keep OpenWrt package Makefiles
+!contrib/openwrt/*/Makefile
 tags
 m4
 gen_rspro.stamp
