@@ -362,6 +362,31 @@ When switching from a native build to cross-compilation (or vice versa), stale b
 rm -rf deps/        # Clean all dependency build artifacts (most thorough)
 ```
 
+#### Technical Details: Cross-Compilation Linker Paths
+
+During OpenWRT cross-compilation, the linker needs explicit paths to resolve transitive dependencies between libraries. The build script handles this automatically:
+
+**Problem**: When building libosmo-netif's example programs (e.g., `ipa-stream-client`), the linker needs to:
+1. Link against `libosmonetif.so` (from the build tree)
+2. Resolve `libosmonetif.so`'s dependencies on libosmocore libraries
+3. Find all libosmocore .so files (libosmocore, libosmogsm, libosmovty, libosmoisdn, etc.)
+
+Without proper linker paths, you may see errors like:
+```
+../src/.libs/libosmonetif.so: undefined reference to `osmo_multiaddr_ip_and_port_snprintf'
+../src/.libs/libosmonetif.so: undefined reference to `osmo_sock_multiaddr_get_name_buf'
+```
+
+**Solution**: The build script uses `-Wl,-rpath-link` flags to tell the cross-compiler linker where to find transitive dependencies:
+- For libosmo-netif builds, adds rpath-link to:
+  - `${INST_DIR}/lib` - where libosmocore is installed
+  - `${DEPS_DIR}/libosmocore/src/core/.libs` - libosmocore.so in build tree
+  - `${DEPS_DIR}/libosmocore/src/gsm/.libs` - libosmogsm.so in build tree
+  - `${DEPS_DIR}/libosmocore/src/vty/.libs` - libosmovty.so in build tree
+  - `${DEPS_DIR}/libosmocore/src/isdn/.libs` - libosmoisdn.so in build tree
+- This ensures the linker can find all required symbols during the link phase
+- Native builds are unaffected (rpath-link only used in OpenWRT mode)
+
 ### bankd Build Failure
 
 There's a known issue with duplicate case labels in `src/bankd/bankd_main.c`. If you encounter this:
