@@ -328,8 +328,14 @@ Talloc uses the Waf build system (not autoconf), which requires special handling
 
 OpenWRT environments typically do not include SCTP (Stream Control Transmission Protocol) support by default. The build script automatically handles this:
 - When building for OpenWRT (`--openwrt` flag), the script adds `--disable-libsctp` to libosmocore and libosmo-netif configure options
+- A patch is automatically applied to libosmocore to make the `netinet/sctp.h` include conditional (see `patches/libosmocore/0001-make-sctp-include-conditional.patch`)
 - This prevents build failures due to missing `netinet/sctp.h` header file
 - SCTP-related features in these libraries will be unavailable, but they are not required for the osmo-remsim client functionality
+
+The patch mechanism in the build script:
+- Automatically applies patches from `patches/<dependency-name>/` directories before building each dependency
+- Patches are applied in alphanumeric order (e.g., 0001-*.patch, 0002-*.patch)
+- If a dependency is already cloned, patches are reapplied on each build by resetting the repository first
 
 ### bankd Build Failure
 

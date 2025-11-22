@@ -1,0 +1,21 @@
+From: osmo-remsim build script <build@osmo-remsim>
+Subject: Make SCTP header include conditional in osmo_io_internal.h
+
+The osmo_io_internal.h header unconditionally includes netinet/sctp.h,
+which causes build failures on systems without SCTP support (e.g., OpenWRT).
+
+This patch makes the include conditional on ENABLE_LIBSCTP being defined,
+which is set by the --enable-libsctp/--disable-libsctp configure options.
+
+--- a/src/core/osmo_io_internal.h
++++ b/src/core/osmo_io_internal.h
+@@ -4,7 +4,9 @@
+ #include <osmocom/core/osmo_io.h>
+ #include <osmocom/core/msgb.h>
+ 
++#ifdef ENABLE_LIBSCTP
+ #include <netinet/sctp.h>
++#endif
+ 
+ #define LOGPIO(iofd, level, fmt, args...) \
+ 	LOGP(iofd->msgb_alloc.ctx, level, fmt, ## args)

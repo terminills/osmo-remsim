@@ -337,6 +337,27 @@ build_dependency() {
         git checkout "$branch"
     fi
     
+    # Apply patches if they exist
+    local patches_dir="${BASE_DIR}/patches/${name}"
+    if [ -d "$patches_dir" ] && [ -n "$(ls -A "$patches_dir"/*.patch 2>/dev/null)" ]; then
+        log_info "Applying patches for $name..."
+        # Reset any previous patches first (in case of re-running build)
+        git reset --hard HEAD 2>/dev/null || true
+        git clean -fd 2>/dev/null || true
+        
+        # Apply all patches in order
+        for patch_file in "$patches_dir"/*.patch; do
+            if [ -f "$patch_file" ]; then
+                log_info "  Applying $(basename "$patch_file")"
+                if ! patch -p1 < "$patch_file"; then
+                    log_error "Failed to apply patch: $(basename "$patch_file")"
+                    exit 1
+                fi
+            fi
+        done
+        log_success "Patches applied successfully"
+    fi
+    
     # Build and install
     log_info "Building $name..."
     autoreconf -fi
