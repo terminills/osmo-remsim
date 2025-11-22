@@ -442,8 +442,14 @@ build_talloc() {
         local arch=$(echo "$host_triplet" | cut -d'-' -f1)
         log_info "Cross-compiling talloc for: $host_triplet"
         
-        # Create cross-answers cache file for waf
-        # Based on OpenWRT's libtalloc package approach
+        # Create cross-answers cache file for waf cross-compilation
+        # Based on OpenWRT's libtalloc package: https://github.com/openwrt/packages/blob/master/libs/libtalloc/Makefile
+        # These answers are for configure tests that can't be executed during cross-compilation
+        # Format: "Test description: result" where result can be:
+        #   - OK/YES: test passes
+        #   - NO/FAIL: test fails
+        #   - (returncode, "output"): specific exit code and output
+        #   - "value": string value result
         cat > cache.txt << 'EOF'
 Checking simple C program: "hello world"
 rpath library support: (127, "")
@@ -459,7 +465,7 @@ Checking for HAVE_INCOHERENT_MMAP: (2, "")
 Checking for HAVE_SECURE_MKSTEMP: OK
 EOF
         
-        # Add uname information specific to target
+        # Add uname information specific to target architecture
         cat >> cache.txt << EOF
 Checking uname machine type: "${arch}"
 Checking uname release type: "5.10.0"
@@ -467,10 +473,17 @@ Checking uname sysname type: "Linux"
 Checking uname version type: "#1 SMP"
 EOF
         
-        # Use waf directly for cross-compilation
-        # talloc uses waf build system, not autoconf
+        # Use waf directly for cross-compilation (talloc uses waf build system, not autoconf)
+        # The waf executable is located in the Samba repository's buildtools directory
+        local waf_bin="../../buildtools/bin/waf"
+        if [ ! -x "$waf_bin" ]; then
+            log_error "Waf executable not found at $waf_bin"
+            log_error "This should not happen with talloc 2.4.2 from Samba repository"
+            exit 1
+        fi
+        
         export PYTHONHASHSEED=1
-        ../../buildtools/bin/waf configure \
+        "$waf_bin" configure \
             --prefix="${INST_DIR}" \
             --cross-compile \
             --cross-answers=cache.txt \
@@ -478,8 +491,8 @@ EOF
             --disable-rpath \
             --disable-rpath-install
         
-        ../../buildtools/bin/waf build ${PARALLEL_MAKE}
-        ../../buildtools/bin/waf install
+        "$waf_bin" build ${PARALLEL_MAKE}
+        "$waf_bin" install
     else
         # Native build - use standard configure wrapper
         ./configure --prefix="${INST_DIR}"
