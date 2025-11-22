@@ -391,6 +391,17 @@ build_dependency() {
         if [ "$name" = "libosmocore" ]; then
             export LDFLAGS="-Wl,-rpath-link=${DEPS_DIR}/$name/src/isdn/.libs -Wl,-rpath-link=${DEPS_DIR}/$name/src/gsm/.libs ${LDFLAGS}"
         fi
+        
+        # For libosmo-netif, ensure the linker can find all libosmocore libraries during example builds
+        # The examples link against libosmonetif.so (from ../src/.libs/) which depends on libosmocore.so.
+        # Even though libosmocore is installed in ${INST_DIR}/lib, during cross-compilation the linker
+        # needs explicit rpath-link to follow transitive dependencies. We add ${INST_DIR}/lib again here
+        # (even though it's already in LDFLAGS above) to ensure it's at the front of the search path,
+        # and we also add libosmocore's build tree in case any utilities or test programs need it.
+        if [ "$name" = "libosmo-netif" ]; then
+            # Prepend ${INST_DIR}/lib to ensure libosmocore libraries are found first
+            export LDFLAGS="-Wl,-rpath-link=${INST_DIR}/lib -Wl,-rpath-link=${DEPS_DIR}/libosmocore/src/core/.libs -Wl,-rpath-link=${DEPS_DIR}/libosmocore/src/gsm/.libs -Wl,-rpath-link=${DEPS_DIR}/libosmocore/src/vty/.libs -Wl,-rpath-link=${DEPS_DIR}/libosmocore/src/isdn/.libs ${LDFLAGS}"
+        fi
     fi
     
     # Add --host flag for cross-compilation in OpenWRT mode
