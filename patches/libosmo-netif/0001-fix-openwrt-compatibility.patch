@@ -1,0 +1,104 @@
+From: osmo-remsim build script <build@osmo-remsim>
+Subject: Fix OpenWRT compatibility issues
+
+This patch addresses two OpenWRT build issues:
+
+1. Replace deprecated <sys/fcntl.h> with POSIX-standard <fcntl.h>
+   The <sys/fcntl.h> header is obsolete and causes compiler warnings on
+   modern toolchains, particularly with musl libc used in OpenWRT:
+     warning: #warning redirecting incorrect #include <sys/fcntl.h>
+   According to POSIX standards, <fcntl.h> is the correct header.
+
+2. Make SCTP header includes conditional
+   - stream_cli.c unconditionally includes sctp.h, causing build failures
+     when SCTP is disabled
+   - sctp.h header unconditionally includes <netinet/sctp.h>, causing
+     build failures on OpenWRT which doesn't provide SCTP headers
+   This makes the includes conditional on HAVE_LIBSCTP, consistent with
+   the library's --disable-libsctp configure option.
+
+Affected files:
+- src/datagram.c - Fix deprecated header
+- src/stream_cli.c - Fix deprecated header and add conditional SCTP include
+- src/stream.c - Fix deprecated header
+- src/stream_srv.c - Fix deprecated header
+- include/osmocom/netif/sctp.h - Make SCTP header conditional
+
+diff --git a/include/osmocom/netif/sctp.h b/include/osmocom/netif/sctp.h
+index 3e1d775..3ed17ac 100644
+--- a/include/osmocom/netif/sctp.h
++++ b/include/osmocom/netif/sctp.h
+@@ -1,8 +1,10 @@
+ #pragma once
+ 
+ #include <osmocom/core/utils.h>
++#ifdef HAVE_LIBSCTP
+ #include <netinet/sctp.h>
+ 
++#endif
+ /* Relevant SCTP RFCs:
+  * rfc9260 (obsoletes rfc4960): SCTP protocol
+  * rfc5061: SCTP Dynamic Address Reconfiguration
+diff --git a/src/datagram.c b/src/datagram.c
+index 9df0630..8e415f2 100644
+--- a/src/datagram.c
++++ b/src/datagram.c
+@@ -24,7 +24,7 @@
+ #include <errno.h>
+ #include <string.h>
+ #include <time.h>
+-#include <sys/fcntl.h>
++#include <fcntl.h>
+ #include <sys/socket.h>
+ #include <sys/ioctl.h>
+ #include <arpa/inet.h>
+diff --git a/src/stream.c b/src/stream.c
+index 339dd6a..9fed7d5 100644
+--- a/src/stream.c
++++ b/src/stream.c
+@@ -26,7 +26,7 @@
+ #include <errno.h>
+ #include <string.h>
+ #include <time.h>
+-#include <sys/fcntl.h>
++#include <fcntl.h>
+ #include <sys/socket.h>
+ #include <sys/ioctl.h>
+ #include <arpa/inet.h>
+diff --git a/src/stream_cli.c b/src/stream_cli.c
+index c623fff..9c009c6 100644
+--- a/src/stream_cli.c
++++ b/src/stream_cli.c
+@@ -26,7 +26,7 @@
+ #include <errno.h>
+ #include <string.h>
+ #include <time.h>
+-#include <sys/fcntl.h>
++#include <fcntl.h>
+ #include <sys/socket.h>
+ #include <sys/ioctl.h>
+ #include <arpa/inet.h>
+@@ -49,8 +49,10 @@
+ 
+ #include "config.h"
+ 
++#ifdef HAVE_LIBSCTP
+ #include <osmocom/netif/sctp.h>
+ 
++#endif
+ /*! \file stream_cli.c */
+ 
+ #define LOGSCLI(cli, level, fmt, args...) \
+diff --git a/src/stream_srv.c b/src/stream_srv.c
+index 695a46f..ee9fd4e 100644
+--- a/src/stream_srv.c
++++ b/src/stream_srv.c
+@@ -26,7 +26,7 @@
+ #include <errno.h>
+ #include <string.h>
+ #include <time.h>
+-#include <sys/fcntl.h>
++#include <fcntl.h>
+ #include <sys/socket.h>
+ #include <sys/un.h>
+ #include <sys/ioctl.h>
