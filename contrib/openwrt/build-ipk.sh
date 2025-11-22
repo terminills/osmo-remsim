@@ -134,8 +134,11 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Validate SDK path - check for git submodule first, then environment variable
-# This mirrors the logic in build.sh for consistency
+# Validate SDK path
+# Priority: 1) --sdk command line option (already sets OPENWRT_SDK_PATH)
+#           2) OPENWRT_SDK_PATH environment variable
+#           3) Git submodule at ./openwrt-sdk (checked only if OPENWRT_SDK_PATH not set)
+# This mirrors the git submodule detection from build.sh
 if [ -z "$OPENWRT_SDK_PATH" ]; then
     # Option 1: Check for git submodule (for nightly builds and version control)
     if [ -d "${REPO_ROOT}/openwrt-sdk" ] && [ -d "${REPO_ROOT}/openwrt-sdk/staging_dir" ]; then
