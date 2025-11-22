@@ -91,6 +91,18 @@ fi
 AM_CONDITIONAL(BUILD_CLIENT_IFDHANDLER, test "x$osmo_ac_build_client_ifdhandler" = "xyes")
 AC_SUBST(BUILD_CLIENT_IFDHANDLER)
 
+AC_ARG_ENABLE([ionmesh],[AS_HELP_STRING([--disable-ionmesh], [Build with IonMesh orchestration support (requires libcurl)])],
+	[osmo_ac_enable_ionmesh="$enableval"],[osmo_ac_enable_ionmesh="yes"])
+if test "$osmo_ac_enable_ionmesh" = "yes"; then
+	AC_CHECK_LIB(curl, curl_easy_init, CURL_LIBS="-lcurl", [AC_MSG_WARN([*** libcurl library not found, disabling IonMesh support]); osmo_ac_enable_ionmesh="no"])
+	AC_CHECK_HEADERS([curl/curl.h], [], [AC_MSG_WARN([*** curl/curl.h not found, disabling IonMesh support]); osmo_ac_enable_ionmesh="no"])
+	AC_SUBST(CURL_LIBS)
+fi
+if test "$osmo_ac_enable_ionmesh" = "yes"; then
+	AC_DEFINE(ENABLE_IONMESH, 1, [Define if we want to build with IonMesh support])
+fi
+AM_CONDITIONAL(ENABLE_IONMESH, test "x$osmo_ac_enable_ionmesh" = "xyes")
+AC_SUBST(ENABLE_IONMESH)
 
 AC_CONFIG_MACRO_DIR([m4])
 
