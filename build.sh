@@ -468,6 +468,8 @@ Checking for HAVE_SECURE_MKSTEMP: OK
 EOF
         
         # Add uname information specific to target architecture
+        # Note: Kernel version 5.10.0 is used as a generic LTS version
+        # The exact version doesn't affect talloc compilation, but waf needs some value
         cat >> cache.txt << EOF
 Checking uname machine type: "${arch}"
 Checking uname release type: "5.10.0"
@@ -504,7 +506,8 @@ EOF
         fi
         
         log_info "Running waf build..."
-        if ! "$waf_bin" build ${PARALLEL_MAKE}; then
+        # Note: waf doesn't use -j flag, pass PARALLEL_MAKE as-is (e.g., "-j4")
+        if ! "$waf_bin" build "${PARALLEL_MAKE}"; then
             log_error "Waf build failed for talloc"
             exit 1
         fi
