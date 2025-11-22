@@ -46,6 +46,7 @@ if [ -z "$JOBS" ]; then
         JOBS=1
     fi
 fi
+export JOBS
 
 PARALLEL_MAKE="-j${JOBS}"
 
@@ -519,6 +520,9 @@ EOF
             log_error "Waf install failed for talloc"
             exit 1
         fi
+        
+        # Clean up cross-answers cache file
+        rm -f cache.txt
     else
         # Native build - use standard configure wrapper
         ./configure --prefix="${INST_DIR}"
