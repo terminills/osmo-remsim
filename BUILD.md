@@ -334,7 +334,9 @@ OpenWRT environments have a minimal set of libraries and headers compared to ful
   - `--disable-gnutls` - GnuTLS library (used as getrandom() fallback in libosmocore)
   - `--disable-pcsc` - PC/SC smart card reader support (libpcsclite)
   - `--disable-libusb` - USB device library support (libusb-1.0)
-- A patch is automatically applied to libosmocore to make the `netinet/sctp.h` include conditional (see `patches/libosmocore/0001-make-sctp-include-conditional.patch`)
+- Patches are automatically applied to libosmocore to fix SCTP-related compilation issues:
+  - `0001-make-sctp-include-conditional.patch` - Makes the `netinet/sctp.h` include conditional
+  - `0002-fix-multiaddr-functions-without-sctp.patch` - Fixes API compatibility by providing fallback implementations for multiaddr functions when SCTP is disabled
 - This prevents build failures due to missing header files or libraries in the OpenWRT SDK
 - These features are not required for the osmo-remsim client functionality on OpenWRT routers
 
@@ -342,6 +344,7 @@ The patch mechanism in the build script:
 - Automatically applies patches from `patches/<dependency-name>/` directories before building each dependency
 - Patches are applied in alphanumeric order (e.g., 0001-*.patch, 0002-*.patch)
 - If a dependency is already cloned, patches are reapplied on each build by resetting the repository first
+- See `patches/README.md` for detailed information about each patch
 
 #### Technical Details: Build Artifact Cleanup for Cross-Compilation
 
@@ -377,15 +380,23 @@ Without proper linker paths, you may see errors like:
 ../src/.libs/libosmonetif.so: undefined reference to `osmo_sock_multiaddr_get_name_buf'
 ```
 
-**Solution**: The build script uses `-Wl,-rpath-link` flags to tell the cross-compiler linker where to find transitive dependencies:
-- For libosmo-netif builds, adds rpath-link to:
-  - `${INST_DIR}/lib` - where libosmocore is installed
-  - `${DEPS_DIR}/libosmocore/src/core/.libs` - libosmocore.so in build tree
-  - `${DEPS_DIR}/libosmocore/src/gsm/.libs` - libosmogsm.so in build tree
-  - `${DEPS_DIR}/libosmocore/src/vty/.libs` - libosmovty.so in build tree
-  - `${DEPS_DIR}/libosmocore/src/isdn/.libs` - libosmoisdn.so in build tree
-- This ensures the linker can find all required symbols during the link phase
-- Native builds are unaffected (rpath-link only used in OpenWRT mode)
+**Solution**: The build script automatically applies patches and configures linker paths:
+
+1. **Patches Applied**: The build script automatically applies patches to fix SCTP-related issues:
+   - `patches/libosmocore/0002-fix-multiaddr-functions-without-sctp.patch` - Fixes the root cause by making `osmo_sock_multiaddr_get_ip_and_port()` available even when SCTP is disabled, with a fallback implementation
+   - This prevents the undefined reference errors entirely by ensuring API compatibility
+
+2. **Linker Path Configuration**: The build script uses `-Wl,-rpath-link` flags to help the linker find transitive dependencies:
+   - For libosmo-netif builds, adds rpath-link to:
+     - `${INST_DIR}/lib` - where libosmocore is installed
+     - `${DEPS_DIR}/libosmocore/src/core/.libs` - libosmocore.so in build tree
+     - `${DEPS_DIR}/libosmocore/src/gsm/.libs` - libosmogsm.so in build tree
+     - `${DEPS_DIR}/libosmocore/src/vty/.libs` - libosmovty.so in build tree
+     - `${DEPS_DIR}/libosmocore/src/isdn/.libs` - libosmoisdn.so in build tree
+   - This ensures the linker can find all required symbols during the link phase
+   - Native builds are unaffected (rpath-link only used in OpenWRT mode)
+
+The combination of patches and linker configuration ensures smooth OpenWRT cross-compilation without manual intervention.
 
 ### bankd Build Failure
 
