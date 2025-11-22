@@ -489,16 +489,31 @@ EOF
         # Set PYTHONHASHSEED for reproducible builds
         # Waf uses Python and this ensures deterministic ordering of hash-based operations
         export PYTHONHASHSEED=1
-        "$waf_bin" configure \
+        
+        log_info "Running waf configure..."
+        if ! "$waf_bin" configure \
             --prefix="${INST_DIR}" \
             --cross-compile \
             --cross-answers=cache.txt \
             --disable-python \
             --disable-rpath \
-            --disable-rpath-install
+            --disable-rpath-install; then
+            log_error "Waf configure failed for talloc cross-compilation"
+            log_error "Check cache.txt answers or cross-compilation environment"
+            exit 1
+        fi
         
-        "$waf_bin" build ${PARALLEL_MAKE}
-        "$waf_bin" install
+        log_info "Running waf build..."
+        if ! "$waf_bin" build ${PARALLEL_MAKE}; then
+            log_error "Waf build failed for talloc"
+            exit 1
+        fi
+        
+        log_info "Running waf install..."
+        if ! "$waf_bin" install; then
+            log_error "Waf install failed for talloc"
+            exit 1
+        fi
     else
         # Native build - use standard configure wrapper
         ./configure --prefix="${INST_DIR}"
