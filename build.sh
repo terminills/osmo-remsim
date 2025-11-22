@@ -360,8 +360,10 @@ build_dependency() {
     
     # Clean any previous build artifacts to avoid architecture mismatch
     # This is critical for cross-compilation to prevent mixing host and target object files
-    log_info "Cleaning previous build artifacts for $name..."
-    make distclean 2>/dev/null || make clean 2>/dev/null || true
+    if [ -f "Makefile" ]; then
+        log_info "Cleaning previous build artifacts for $name..."
+        make distclean 2>/dev/null || make clean 2>/dev/null || true
+    fi
     
     # Build and install
     log_info "Building $name..."
@@ -634,8 +636,10 @@ build_osmocom_dependencies() {
         log_info "Building simtrace2 host component..."
         
         # Clean any previous build artifacts to avoid architecture mismatch
-        log_info "Cleaning previous build artifacts for simtrace2..."
-        make distclean 2>/dev/null || make clean 2>/dev/null || true
+        if [ -f "Makefile" ]; then
+            log_info "Cleaning previous build artifacts for simtrace2..."
+            make distclean 2>/dev/null || make clean 2>/dev/null || true
+        fi
         
         autoreconf -fi
         export PKG_CONFIG_PATH="${INST_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}"
