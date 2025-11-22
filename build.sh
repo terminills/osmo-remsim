@@ -569,9 +569,9 @@ build_osmocom_dependencies() {
     
     # Build libosmocore
     local libosmocore_opts="--disable-doxygen"
-    # Disable SCTP and libmnl support for OpenWRT builds (headers not available)
+    # Disable SCTP, libmnl, and io_uring support for OpenWRT builds (headers not available)
     if [ "$OPENWRT_MODE" -eq 1 ]; then
-        libosmocore_opts="$libosmocore_opts --disable-libsctp --disable-libmnl"
+        libosmocore_opts="$libosmocore_opts --disable-libsctp --disable-libmnl --disable-uring"
     fi
     build_dependency \
         "libosmocore" \
