@@ -5,7 +5,7 @@ The osmo_io_internal.h and osmo_io_uring.c files unconditionally include
 netinet/sctp.h, which causes build failures on systems without SCTP support
 (e.g., OpenWRT).
 
-This patch makes the include conditional on ENABLE_LIBSCTP being defined,
+This patch makes the include conditional on HAVE_LIBSCTP being defined,
 which is set by the --enable-libsctp/--disable-libsctp configure options.
 
 --- a/src/core/osmo_io_internal.h
@@ -14,7 +14,7 @@ which is set by the --enable-libsctp/--disable-libsctp configure options.
  
  #include <unistd.h>
  #include <stdbool.h>
-+#ifdef ENABLE_LIBSCTP
++#ifdef HAVE_LIBSCTP
  #include <netinet/sctp.h>
 +#endif
  
@@ -26,7 +26,7 @@ which is set by the --enable-libsctp/--disable-libsctp configure options.
  #include <limits.h>
  
  #include <netinet/in.h>
-+#ifdef ENABLE_LIBSCTP
++#ifdef HAVE_LIBSCTP
  #include <netinet/sctp.h>
 +#endif
  #include <sys/eventfd.h>
