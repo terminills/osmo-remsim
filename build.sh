@@ -382,6 +382,15 @@ build_dependency() {
         # Add both -L (library search path) and -Wl,-rpath-link (transitive dependency path for cross-compilation)
         # The rpath-link is critical for the linker to find indirect dependencies like libosmoisdn during libosmocore build
         export LDFLAGS="-L${INST_DIR}/lib -Wl,-rpath-link=${INST_DIR}/lib ${LDFLAGS}"
+        
+        # For libosmocore specifically, also add the source tree's .libs directories to rpath-link
+        # This is needed because libosmocore's utilities (osmo-arfcn, osmo-auc-gen, etc.) are built
+        # during 'make' (before 'make install') and link against libosmogsm.so which depends on libosmoisdn.so.
+        # At that point, libosmoisdn.so is only in the build tree (src/isdn/.libs/), not yet in ${INST_DIR}/lib.
+        # The linker needs -Wl,-rpath-link to find these transitive dependencies during cross-compilation.
+        if [ "$name" = "libosmocore" ]; then
+            export LDFLAGS="-Wl,-rpath-link=${DEPS_DIR}/$name/src/isdn/.libs -Wl,-rpath-link=${DEPS_DIR}/$name/src/gsm/.libs ${LDFLAGS}"
+        fi
     fi
     
     # Add --host flag for cross-compilation in OpenWRT mode
