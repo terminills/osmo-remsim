@@ -1,7 +1,7 @@
 From: osmo-remsim build script <build@osmo-remsim>
 Subject: Fix OpenWRT compatibility issues
 
-This patch addresses two OpenWRT build issues:
+This patch addresses three OpenWRT build issues:
 
 1. Replace deprecated <sys/fcntl.h> with POSIX-standard <fcntl.h>
    The <sys/fcntl.h> header is obsolete and causes compiler warnings on
@@ -9,36 +9,116 @@ This patch addresses two OpenWRT build issues:
      warning: #warning redirecting incorrect #include <sys/fcntl.h>
    According to POSIX standards, <fcntl.h> is the correct header.
 
-2. Make SCTP header includes conditional
+2. Make SCTP header includes and function declarations conditional
    - stream_cli.c unconditionally includes sctp.h, causing build failures
      when SCTP is disabled
-   - sctp.h header unconditionally includes <netinet/sctp.h>, causing
-     build failures on OpenWRT which doesn't provide SCTP headers
-   This makes the includes conditional on HAVE_LIBSCTP, consistent with
-   the library's --disable-libsctp configure option.
+   - sctp.h header unconditionally includes <netinet/sctp.h> and declares
+     functions using SCTP enum types, causing build failures on OpenWRT
+     which doesn't provide SCTP headers
+   This makes the includes and declarations conditional on HAVE_LIBSCTP,
+   consistent with the library's --disable-libsctp configure option.
+
+3. Guard SCTP-specific code in stream_srv.c
+   - Code using srv_ioops_sctp and struct sctp_sndrcvinfo must be
+     conditionally compiled when SCTP support is disabled
 
 Affected files:
 - src/datagram.c - Fix deprecated header
 - src/stream_cli.c - Fix deprecated header and add conditional SCTP include
 - src/stream.c - Fix deprecated header
-- src/stream_srv.c - Fix deprecated header
-- include/osmocom/netif/sctp.h - Make SCTP header conditional
+- src/stream_srv.c - Fix deprecated header and guard SCTP-specific code
+- include/osmocom/netif/sctp.h - Make SCTP header and declarations conditional
 
 diff --git a/include/osmocom/netif/sctp.h b/include/osmocom/netif/sctp.h
-index 3e1d775..3ed17ac 100644
+index 3e1d775..eeea2cd 100644
 --- a/include/osmocom/netif/sctp.h
 +++ b/include/osmocom/netif/sctp.h
-@@ -1,8 +1,10 @@
+@@ -1,7 +1,6 @@
  #pragma once
  
  #include <osmocom/core/utils.h>
-+#ifdef HAVE_LIBSCTP
- #include <netinet/sctp.h>
+-#include <netinet/sctp.h>
  
-+#endif
  /* Relevant SCTP RFCs:
   * rfc9260 (obsoletes rfc4960): SCTP protocol
-  * rfc5061: SCTP Dynamic Address Reconfiguration
+@@ -9,22 +8,7 @@
+  * rfc6458: SCTP Sockets API Extensions
+  */
+ 
+-extern const struct value_string osmo_sctp_assoc_chg_strs[];
+-static inline const char *osmo_sctp_assoc_chg_str(enum sctp_sac_state val)
+-{ return get_value_string(osmo_sctp_assoc_chg_strs, val); }
+-
+-extern const struct value_string osmo_sctp_paddr_chg_strs[];
+-static inline const char *osmo_sctp_paddr_chg_str(enum sctp_spc_state val)
+-{ return get_value_string(osmo_sctp_paddr_chg_strs, val); }
+-
+-extern const struct value_string osmo_sctp_sn_type_strs[];
+-static inline const char *osmo_sctp_sn_type_str(enum sctp_sn_type val)
+-{ return get_value_string(osmo_sctp_sn_type_strs, val); }
+-
+-extern const struct value_string osmo_sctp_sn_error_strs[];
+-static inline const char *osmo_sctp_sn_error_str(enum sctp_sn_error val)
+-{ return get_value_string(osmo_sctp_sn_error_strs, val); }
+-
++/* Library-defined enum - always available */
+ enum osmo_sctp_op_error {
+ 	OSMO_SCTP_OP_ERR_INVALID_STREAM_ID =  1,
+ 	OSMO_SCTP_OP_ERR_MISS_MAND_PARAM =  2,
+@@ -44,6 +28,26 @@ extern const struct value_string osmo_sctp_op_error_strs[];
+ static inline const char *osmo_sctp_op_error_str(enum osmo_sctp_op_error val)
+ { return get_value_string(osmo_sctp_op_error_strs, val); }
+ 
++#ifdef HAVE_LIBSCTP
++#include <netinet/sctp.h>
++
++/* Functions that use system SCTP types - only available when SCTP is enabled */
++extern const struct value_string osmo_sctp_assoc_chg_strs[];
++static inline const char *osmo_sctp_assoc_chg_str(enum sctp_sac_state val)
++{ return get_value_string(osmo_sctp_assoc_chg_strs, val); }
++
++extern const struct value_string osmo_sctp_paddr_chg_strs[];
++static inline const char *osmo_sctp_paddr_chg_str(enum sctp_spc_state val)
++{ return get_value_string(osmo_sctp_paddr_chg_strs, val); }
++
++extern const struct value_string osmo_sctp_sn_type_strs[];
++static inline const char *osmo_sctp_sn_type_str(enum sctp_sn_type val)
++{ return get_value_string(osmo_sctp_sn_type_strs, val); }
++
++extern const struct value_string osmo_sctp_sn_error_strs[];
++static inline const char *osmo_sctp_sn_error_str(enum sctp_sn_error val)
++{ return get_value_string(osmo_sctp_sn_error_strs, val); }
++
+ extern const struct value_string osmo_sctp_spinfo_state_strs[];
+ static inline const char *osmo_sctp_spinfo_state_str(enum sctp_spinfo_state val)
+ { return get_value_string(osmo_sctp_spinfo_state_strs, val); }
+@@ -51,3 +55,5 @@ static inline const char *osmo_sctp_spinfo_state_str(enum sctp_spinfo_state val)
+ extern const struct value_string osmo_sctp_sstat_state_strs[];
+ static inline const char *osmo_sctp_sstat_state_str(enum sctp_sstat_state val)
+ { return get_value_string(osmo_sctp_sstat_state_strs, val); }
++
++#endif /* HAVE_LIBSCTP */
+diff --git a/include/osmocom/netif/stream_private.h b/include/osmocom/netif/stream_private.h
+index 154e7f7..bbc3a95 100644
+--- a/include/osmocom/netif/stream_private.h
++++ b/include/osmocom/netif/stream_private.h
+@@ -54,11 +54,15 @@ int stream_setsockopt_tcp_user_timeout(int fd, unsigned int user_timeout);
+ struct osmo_io_fd;
+ struct msghdr;
+ 
++/* Functions with fallbacks for non-SCTP builds - always available */
+ int stream_sctp_sock_activate_events(int fd);
+ int stream_setsockopt_nodelay(int fd, int proto, int on);
+-int stream_sctp_recvmsg_wrapper(int fd, struct msgb *msg, const char *log_pfx);
+ 
++#ifdef HAVE_LIBSCTP
++/* Pure SCTP functions - only available when SCTP is enabled */
++int stream_sctp_recvmsg_wrapper(int fd, struct msgb *msg, const char *log_pfx);
+ int stream_iofd_sctp_send_msgb(struct osmo_io_fd *iofd, struct msgb *msg, int sendmsg_flags);
+ int stream_iofd_sctp_recvmsg_trailer(struct osmo_io_fd *iofd, struct msgb *msg, int ret, const struct msghdr *msgh);
++#endif
+ 
+ /*! \endcond */
 diff --git a/src/datagram.c b/src/datagram.c
 index 9df0630..8e415f2 100644
 --- a/src/datagram.c
@@ -66,7 +146,7 @@ index 339dd6a..9fed7d5 100644
  #include <sys/ioctl.h>
  #include <arpa/inet.h>
 diff --git a/src/stream_cli.c b/src/stream_cli.c
-index c623fff..9c009c6 100644
+index c623fff..6aeb0db 100644
 --- a/src/stream_cli.c
 +++ b/src/stream_cli.c
 @@ -26,7 +26,7 @@
@@ -78,19 +158,30 @@ index c623fff..9c009c6 100644
  #include <sys/socket.h>
  #include <sys/ioctl.h>
  #include <arpa/inet.h>
-@@ -49,8 +49,10 @@
+@@ -49,7 +49,9 @@
  
  #include "config.h"
  
 +#ifdef HAVE_LIBSCTP
  #include <osmocom/netif/sctp.h>
- 
 +#endif
+ 
  /*! \file stream_cli.c */
  
- #define LOGSCLI(cli, level, fmt, args...) \
+@@ -1383,9 +1385,11 @@ void osmo_stream_cli_send(struct osmo_stream_cli *cli, struct msgb *msg)
+ 	case OSMO_STREAM_MODE_OSMO_IO:
+ 		/* whenever osmo_stream_cli_is_connected() [see above check], we should have an iofd */
+ 		OSMO_ASSERT(cli->iofd);
++#ifdef HAVE_LIBSCTP
+ 		if (cli->proto == IPPROTO_SCTP)
+ 			rc = stream_iofd_sctp_send_msgb(cli->iofd, msg, MSG_NOSIGNAL);
+ 		else
++#endif
+ 			rc = osmo_iofd_write_msgb(cli->iofd, msg);
+ 		if (rc < 0)
+ 			msgb_free(msg);
 diff --git a/src/stream_srv.c b/src/stream_srv.c
-index 695a46f..ee9fd4e 100644
+index 695a46f..e67acb7 100644
 --- a/src/stream_srv.c
 +++ b/src/stream_srv.c
 @@ -26,7 +26,7 @@
@@ -102,3 +193,32 @@ index 695a46f..ee9fd4e 100644
  #include <sys/socket.h>
  #include <sys/un.h>
  #include <sys/ioctl.h>
+@@ -1038,12 +1038,15 @@ osmo_stream_srv_create2(void *ctx, struct osmo_stream_srv_link *link, int fd, vo
+ 
+ 	osmo_sock_get_name_buf(conn->sockname, sizeof(conn->sockname), fd);
+ 
++#ifdef HAVE_LIBSCTP
+ 	if (link->proto == IPPROTO_SCTP) {
+ 		conn->iofd = osmo_iofd_setup(conn, fd, conn->sockname, OSMO_IO_FD_MODE_RECVMSG_SENDMSG,
+ 					     &srv_ioops_sctp, conn);
+ 		if (conn->iofd)
+ 			osmo_iofd_set_cmsg_size(conn->iofd, CMSG_SPACE(sizeof(struct sctp_sndrcvinfo)));
+-	} else {
++	} else
++#endif
++	{
+ 		conn->iofd = osmo_iofd_setup(conn, fd, conn->sockname, OSMO_IO_FD_MODE_READ_WRITE,
+ 					     &srv_ioops, conn);
+ 	}
+@@ -1369,9 +1372,11 @@ void osmo_stream_srv_send(struct osmo_stream_srv *conn, struct msgb *msg)
+ 		osmo_fd_write_enable(&conn->ofd);
+ 		break;
+ 	case OSMO_STREAM_MODE_OSMO_IO:
++#ifdef HAVE_LIBSCTP
+ 		if (conn->srv->proto == IPPROTO_SCTP)
+ 			rc = stream_iofd_sctp_send_msgb(conn->iofd, msg, MSG_NOSIGNAL);
+ 		else
++#endif
+ 			rc = osmo_iofd_write_msgb(conn->iofd, msg);
+ 		if (rc < 0)
+ 			msgb_free(msg);
