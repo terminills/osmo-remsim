@@ -49,6 +49,17 @@ git diff > /path/to/osmo-remsim/patches/libosmocore/0001-my-patch.patch
 - **Affects**: `src/core/osmo_io_internal.h` and `src/core/osmo_io_uring.c`
 - **When applied**: Always (harmless on systems with SCTP support)
 
+#### 0002-fix-multiaddr-functions-without-sctp.patch
+- **Purpose**: Fix undefined reference errors when linking against libosmocore built with `--disable-libsctp`
+- **Details**: The functions `osmo_sock_multiaddr_get_name_buf()` and `osmo_multiaddr_ip_and_port_snprintf()` 
+  were always compiled and exported, but they called `osmo_sock_multiaddr_get_ip_and_port()` which was only 
+  compiled when SCTP support was enabled. This caused linker errors in libosmo-netif examples during OpenWRT 
+  cross-compilation. The patch moves `osmo_sock_multiaddr_get_ip_and_port()` outside the `#ifdef HAVE_LIBSCTP` 
+  block but keeps the SCTP-specific implementation guarded. When SCTP is disabled, the function falls back to 
+  the regular single-address function for all protocols.
+- **Affects**: `src/core/socket.c`
+- **When applied**: Always (maintains API compatibility while fixing linker errors)
+
 ### libosmo-netif
 
 #### 0001-fix-openwrt-compatibility.patch
