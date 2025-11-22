@@ -4,22 +4,21 @@ Subject: Move multiaddr functions outside HAVE_LIBSCTP ifdef
 The functions osmo_sock_multiaddr_get_name_buf() and osmo_multiaddr_ip_and_port_snprintf()
 are needed by libosmo-netif even when SCTP is disabled, causing undefined reference errors.
 
-This patch removes both #ifdef HAVE_LIBSCTP blocks that guard these functions, making them
-always available. Internal SCTP-specific operations remain conditional with appropriate
-fallbacks for non-SCTP builds.
+This patch moves the #ifdef HAVE_LIBSCTP to be after osmo_sock_multiaddr_get_ip_and_port()
+definition, making the two formatting/display functions always available. The SCTP-specific
+socket operations remain conditional.
 
---- a/src/core/socket.c	2025-11-22 22:23:26.043296928 +0000
-+++ b/src/core/socket.c	2025-11-22 22:24:36.678601329 +0000
-@@ -1894,7 +1894,7 @@
+--- a/src/core/socket.c
++++ b/src/core/socket.c
+@@ -1894,7 +1894,6 @@ int osmo_sock_get_ip_and_port(int fd, char *ip, size_t ip_len, char *port, size_
  	return 0;
  }
  
 -#ifdef HAVE_LIBSCTP
-+
  /*! Get multiple IP addresses and/or port number on socket in separate string buffers
   *  \param[in] fd file descriptor of socket.
   *  \param[out] ip_proto IPPROTO of the socket, eg: IPPROTO_SCTP.
-@@ -1930,6 +1930,8 @@
+@@ -1930,6 +1929,8 @@ int osmo_sock_multiaddr_get_ip_and_port(int fd, int ip_proto, char *ip, size_t *
  	void *addr_buf;
  	int rc;
  
@@ -28,10 +27,11 @@ fallbacks for non-SCTP builds.
  	switch (ip_proto) {
  	case IPPROTO_SCTP:
  		break; /* continue below */
-@@ -1983,6 +1985,14 @@
+@@ -1982,8 +1983,16 @@ int osmo_sock_multiaddr_get_ip_and_port(int fd, int ip_proto, char *ip, size_t *
+ free_addrs_ret:
  	local ? sctp_freeladdrs(addrs) : sctp_freepaddrs(addrs);
  	return rc;
- }
+-}
 +#else
 +	/* When SCTP is disabled, fall back to single-address function for all protocols */
 +	if (*ip_cnt == 0) {
@@ -41,22 +41,14 @@ fallbacks for non-SCTP builds.
 +	*ip_cnt = 1;
 +	return osmo_sock_get_ip_and_port(fd, ip, ip_len, port, port_len, local);
  #endif
++}
  
- /*! Get local IP address on socket
-@@ -2046,7 +2056,7 @@
- 	return talloc_asprintf(ctx, "(%s)", str);
- }
- 
--#ifdef HAVE_LIBSCTP
-+
  /*! Format multiple IP addresses and/or port number into a combined string buffer
   *  \param[out] str  Destination string buffer.
-  *  \param[in] str_len  sizeof(str), usually OSMO_SOCK_MULTIADDR_PEER_STR_MAXLEN.
-@@ -2111,12 +2121,19 @@
+@@ -2040,10 +2049,16 @@ int osmo_sock_multiaddr_get_name_buf(char *str, size_t str_len, int fd, int sk_
  		return sb.chars_needed;
  	}
  
-+
 +#ifdef HAVE_LIBSCTP
  	switch (sk_proto) {
  	case IPPROTO_SCTP:
@@ -70,14 +62,13 @@ fallbacks for non-SCTP builds.
 +	return osmo_sock_get_name_buf(str, str_len, fd);
 +#endif
  
- 	/* get remote */
- 	OSMO_STRBUF_PRINTF(sb, "r=");
-@@ -2152,7 +2169,7 @@
+ 
+@@ -2162,9 +2173,8 @@ int osmo_sock_multiaddr_get_name_buf(char *str, size_t str_len, int fd, int sk_
+ 	}
  
  	return sb.chars_needed;
  }
 -#endif
-+
  
  /*! Get address/port information on socket in provided string buffer, like "r=1.2.3.4:5<->l=6.7.8.9:10".
   * This does not include braces like osmo_sock_get_name().
