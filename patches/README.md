@@ -74,6 +74,16 @@ git diff > /path/to/osmo-remsim/patches/libosmocore/0001-my-patch.patch
   - Sources: `src/datagram.c`, `src/stream_cli.c`, `src/stream.c`, `src/stream_srv.c`
 - **When applied**: Always (eliminates warnings and build failures on OpenWRT with --disable-libsctp)
 
+#### 0002-add-disable-examples-configure-option.patch
+- **Purpose**: Add configure option to skip building example programs
+- **Details**: 
+  Adds `--disable-examples` configure option to optionally skip building the examples directory.
+  This solves linking issues during cross-compilation where examples may fail to link even though
+  the main library builds successfully. Examples are built by default for backward compatibility.
+- **Affects**: `Makefile.am`, `configure.ac`
+- **When applied**: Always (no effect unless --disable-examples is used)
+- **Used by**: OpenWRT builds (via `build.sh --openwrt`)
+
 ## Notes
 
 - Patches are reapplied on every build (repository is reset first)
