@@ -394,13 +394,20 @@ build_dependency() {
         
         # For libosmo-netif, ensure the linker can find all libosmocore libraries during example builds
         # The examples link against libosmonetif.so (from ../src/.libs/) which depends on libosmocore.so.
-        # Even though libosmocore is installed in ${INST_DIR}/lib, during cross-compilation the linker
-        # needs explicit rpath-link to follow transitive dependencies. We add ${INST_DIR}/lib again here
-        # (even though it's already in LDFLAGS above) to ensure it's at the front of the search path,
-        # and we also add libosmocore's build tree in case any utilities or test programs need it.
+        # During cross-compilation, the linker needs explicit rpath-link to follow transitive dependencies.
+        # We prepend multiple rpath-link paths to ensure the linker can find:
+        # 1. Installed libosmocore libraries (in ${INST_DIR}/lib)
+        # 2. libosmocore build tree libraries (in various .libs/ subdirectories)
+        # This is necessary because during the build of libosmo-netif examples, libosmocore libraries
+        # might be in either location depending on build order and timing.
         if [ "$name" = "libosmo-netif" ]; then
-            # Prepend ${INST_DIR}/lib to ensure libosmocore libraries are found first
-            export LDFLAGS="-Wl,-rpath-link=${INST_DIR}/lib -Wl,-rpath-link=${DEPS_DIR}/libosmocore/src/core/.libs -Wl,-rpath-link=${DEPS_DIR}/libosmocore/src/gsm/.libs -Wl,-rpath-link=${DEPS_DIR}/libosmocore/src/vty/.libs -Wl,-rpath-link=${DEPS_DIR}/libosmocore/src/isdn/.libs ${LDFLAGS}"
+            # Build the rpath-link flags for better readability
+            local rpath_flags="-Wl,-rpath-link=${INST_DIR}/lib"
+            rpath_flags="$rpath_flags -Wl,-rpath-link=${DEPS_DIR}/libosmocore/src/core/.libs"
+            rpath_flags="$rpath_flags -Wl,-rpath-link=${DEPS_DIR}/libosmocore/src/gsm/.libs"
+            rpath_flags="$rpath_flags -Wl,-rpath-link=${DEPS_DIR}/libosmocore/src/vty/.libs"
+            rpath_flags="$rpath_flags -Wl,-rpath-link=${DEPS_DIR}/libosmocore/src/isdn/.libs"
+            export LDFLAGS="$rpath_flags ${LDFLAGS}"
         fi
     fi
     
