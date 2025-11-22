@@ -615,13 +615,9 @@ build_osmocom_dependencies() {
     
     # Build libosmocore
     local libosmocore_opts="--disable-doxygen"
-    # OpenWRT: disable unavailable features (USB, PCSC, etc.) and unnecessary components (utilities, systemd)
-    # Note: We keep SCTP enabled in libosmocore even though we disable it in libosmo-netif,
-    # because libosmo-netif still needs some of the multi-address socket functions from libosmocore
-    # (osmo_multiaddr_ip_and_port_snprintf, osmo_sock_multiaddr_get_name_buf) which are conditionally
-    # compiled with HAVE_LIBSCTP in libosmocore.
+    # OpenWRT: disable unavailable features (SCTP, USB, PCSC, etc.) and unnecessary components (utilities, systemd)
     if [ "$OPENWRT_MODE" -eq 1 ]; then
-        libosmocore_opts="$libosmocore_opts --disable-libmnl --disable-uring --disable-gnutls --disable-pcsc --disable-libusb --disable-utilities --disable-systemd-logging"
+        libosmocore_opts="$libosmocore_opts --disable-libsctp --disable-libmnl --disable-uring --disable-gnutls --disable-pcsc --disable-libusb --disable-utilities --disable-systemd-logging"
     fi
     build_dependency \
         "libosmocore" \
