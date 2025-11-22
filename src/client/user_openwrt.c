@@ -55,6 +55,19 @@
 #define DEFAULT_MODEM2_SIM_SWITCH_GPIO 22
 #define DEFAULT_MODEM2_RESET_GPIO 23
 
+/* Zbtlink ZBT-Z8102AX specific GPIO mappings (MT7981 chipset)
+ * Reference: Device Tree Source (DTS) file
+ * These can be used via environment variables:
+ *   MODEM1_SIM_GPIO=6 MODEM1_RESET_GPIO=4 (for 5G modem 1)
+ *   MODEM2_SIM_GPIO=7 MODEM2_RESET_GPIO=5 (for 5G modem 2)
+ *   PCIE_POWER_GPIO=3 (PCIe power control for modems)
+ */
+#define ZBT_Z8102AX_SIM1_GPIO 6
+#define ZBT_Z8102AX_SIM2_GPIO 7
+#define ZBT_Z8102AX_5G1_POWER_GPIO 4
+#define ZBT_Z8102AX_5G2_POWER_GPIO 5
+#define ZBT_Z8102AX_PCIE_POWER_GPIO 3
+
 /* Modem configuration for dual-modem setups */
 struct modem_config {
 	int sim_switch_gpio;
@@ -86,6 +99,13 @@ struct openwrt_state {
 	struct ionmesh_config *ionmesh_cfg;
 	struct ionmesh_assignment ionmesh_assignment;
 	bool use_ionmesh;
+	
+	/* Modem communication */
+	struct osmo_fd modem_ofd;
+	bool modem_fd_registered;
+	struct msgb *modem_rx_msg;
+	uint8_t pending_apdu[1024];
+	size_t pending_apdu_len;
 };
 
 static struct openwrt_state *g_openwrt_state = NULL;
@@ -272,15 +292,15 @@ int frontend_request_modem_reset(struct bankd_client *bc)
 
 int frontend_handle_card2modem(struct bankd_client *bc, const uint8_t *data, size_t len)
 {
+	struct openwrt_state *os = bc->data;
+	
 	OSMO_ASSERT(data);
+	OSMO_ASSERT(os);
 
 	LOGP(DMAIN, LOGL_DEBUG, "Card->Modem APDU: %s\n", osmo_hexdump(data, len));
 
-	/* In a real implementation, this would forward the APDU to the modem
-	 * For OpenWRT, this typically goes through the modem's AT command interface
-	 * or a direct APDU channel. For now, we log it. */
-
-	return 0;
+	/* Forward the APDU to the modem via AT+CSIM command */
+	return openwrt_send_tpdu_to_modem(os, data, len);
 }
 
 int frontend_handle_set_atr(struct bankd_client *bc, const uint8_t *data, size_t len)
@@ -332,18 +352,181 @@ int frontend_append_script_env(struct bankd_client *bc, char **env, int idx, siz
  * Modem Interface Functions
  ***********************************************************************/
 
+/* Convert binary data to hex string for AT+CSIM command */
+static char *bin_to_hex_str(const uint8_t *data, size_t len)
+{
+	static char hex_str[2048];
+	size_t i;
+	
+	if (len * 2 >= sizeof(hex_str)) {
+		LOGP(DMAIN, LOGL_ERROR, "Data too long for hex conversion: %zu bytes\n", len);
+		return NULL;
+	}
+	
+	for (i = 0; i < len; i++) {
+		snprintf(&hex_str[i * 2], 3, "%02X", data[i]);
+	}
+	hex_str[len * 2] = '\0';
+	
+	return hex_str;
+}
+
+/* Parse hex string response from AT+CSIM into binary */
+static int hex_str_to_bin(const char *hex_str, uint8_t *buf, size_t buf_len)
+{
+	size_t len = strlen(hex_str);
+	size_t i;
+	
+	if (len % 2 != 0) {
+		LOGP(DMAIN, LOGL_ERROR, "Invalid hex string length: %zu\n", len);
+		return -EINVAL;
+	}
+	
+	if (len / 2 > buf_len) {
+		LOGP(DMAIN, LOGL_ERROR, "Buffer too small for hex string: %zu > %zu\n", len / 2, buf_len);
+		return -ENOSPC;
+	}
+	
+	for (i = 0; i < len / 2; i++) {
+		if (sscanf(&hex_str[i * 2], "%2hhx", &buf[i]) != 1) {
+			LOGP(DMAIN, LOGL_ERROR, "Failed to parse hex string at position %zu\n", i);
+			return -EINVAL;
+		}
+	}
+	
+	return len / 2;
+}
+
+/* Callback for modem file descriptor - handles responses from modem */
+static int modem_fd_cb(struct osmo_fd *ofd, unsigned int what)
+{
+	struct openwrt_state *os = ofd->data;
+	struct bankd_client *bc = os->bc;
+	char buf[1024];
+	int rc;
+	
+	if (!(what & OSMO_FD_READ))
+		return 0;
+	
+	rc = read(ofd->fd, buf, sizeof(buf) - 1);
+	if (rc < 0) {
+		LOGP(DMAIN, LOGL_ERROR, "Failed to read from modem: %s\n", strerror(errno));
+		return rc;
+	}
+	
+	if (rc == 0) {
+		LOGP(DMAIN, LOGL_NOTICE, "Modem device closed\n");
+		return 0;
+	}
+	
+	buf[rc] = '\0';
+	LOGP(DMAIN, LOGL_DEBUG, "Modem response: %s\n", buf);
+	
+	/* Parse AT+CSIM response: +CSIM: <length>,"<response>" */
+	char *csim_start = strstr(buf, "+CSIM:");
+	if (csim_start) {
+		int resp_len;
+		char hex_resp[1024];
+		
+		if (sscanf(csim_start, "+CSIM: %d,\"%[^\"]\"", &resp_len, hex_resp) == 2) {
+			uint8_t apdu_resp[512];
+			int parsed_len;
+			
+			LOGP(DMAIN, LOGL_DEBUG, "Parsed CSIM response: len=%d, data=%s\n", 
+			     resp_len, hex_resp);
+			
+			parsed_len = hex_str_to_bin(hex_resp, apdu_resp, sizeof(apdu_resp));
+			if (parsed_len > 0) {
+				struct frontend_tpdu ftpdu = {
+					.buf = apdu_resp,
+					.len = parsed_len
+				};
+				
+				LOGP(DMAIN, LOGL_INFO, "Forwarding APDU response from modem: %s\n",
+				     osmo_hexdump(apdu_resp, parsed_len));
+				
+				/* Forward APDU response to bankd via main FSM */
+				osmo_fsm_inst_dispatch(bc->main_fi, MF_E_MDM_TPDU, &ftpdu);
+			}
+		}
+	}
+	
+	return 0;
+}
+
 static int openwrt_send_tpdu_to_modem(struct openwrt_state *os, const uint8_t *data, size_t len)
 {
+	char *hex_data;
+	char at_cmd[2048];
+	int rc;
+	
 	LOGP(DMAIN, LOGL_DEBUG, "Sending TPDU to modem: %s\n", osmo_hexdump(data, len));
+	
+	if (!os->modem_fd_registered) {
+		LOGP(DMAIN, LOGL_ERROR, "Modem device not opened, cannot send APDU\n");
+		return -ENOTCONN;
+	}
+	
+	/* Convert APDU to hex string */
+	hex_data = bin_to_hex_str(data, len);
+	if (!hex_data) {
+		LOGP(DMAIN, LOGL_ERROR, "Failed to convert APDU to hex string\n");
+		return -EINVAL;
+	}
+	
+	/* Build AT+CSIM command
+	 * Format: AT+CSIM=<length>,"<command>"
+	 * Length is the number of characters in the hex string */
+	snprintf(at_cmd, sizeof(at_cmd), "AT+CSIM=%zu,\"%s\"\r\n", len * 2, hex_data);
+	
+	LOGP(DMAIN, LOGL_DEBUG, "Sending AT command to modem: %s", at_cmd);
+	
+	rc = write(os->modem_ofd.fd, at_cmd, strlen(at_cmd));
+	if (rc < 0) {
+		LOGP(DMAIN, LOGL_ERROR, "Failed to write to modem: %s\n", strerror(errno));
+		return -errno;
+	}
+	
+	if ((size_t)rc != strlen(at_cmd)) {
+		LOGP(DMAIN, LOGL_ERROR, "Incomplete write to modem: %d/%zu\n", rc, strlen(at_cmd));
+		return -EIO;
+	}
+	
+	LOGP(DMAIN, LOGL_INFO, "Sent APDU to modem via AT+CSIM (length=%zu)\n", len);
+	return 0;
+}
 
-	/* In a real implementation, this would interface with the modem's SIM interface
-	 * This could be done via:
-	 * 1. AT commands (AT+CSIM for generic SIM access)
-	 * 2. QMI interface for Qualcomm modems
-	 * 3. Direct character device access if available
-	 * 
-	 * For now, we simulate the modem accepting the TPDU */
-
+static int openwrt_open_modem_device(struct openwrt_state *os)
+{
+	int fd;
+	
+	if (!os->modem_device) {
+		LOGP(DMAIN, LOGL_NOTICE, "No modem device configured, APDU forwarding disabled\n");
+		return -ENODEV;
+	}
+	
+	LOGP(DMAIN, LOGL_INFO, "Opening modem device: %s\n", os->modem_device);
+	
+	fd = open(os->modem_device, O_RDWR | O_NOCTTY | O_NONBLOCK);
+	if (fd < 0) {
+		LOGP(DMAIN, LOGL_ERROR, "Failed to open modem device %s: %s\n",
+		     os->modem_device, strerror(errno));
+		return -errno;
+	}
+	
+	/* Set up the file descriptor for osmocom select loop */
+	osmo_fd_setup(&os->modem_ofd, fd, OSMO_FD_READ, modem_fd_cb, os, 0);
+	
+	if (osmo_fd_register(&os->modem_ofd) < 0) {
+		LOGP(DMAIN, LOGL_ERROR, "Failed to register modem fd with osmocom select\n");
+		close(fd);
+		return -EIO;
+	}
+	
+	os->modem_fd_registered = true;
+	LOGP(DMAIN, LOGL_INFO, "Modem device opened successfully: %s (fd=%d)\n",
+	     os->modem_device, fd);
+	
 	return 0;
 }
 
@@ -405,7 +588,87 @@ static int openwrt_init_modem(struct openwrt_state *os)
 		}
 	}
 
+	/* Open modem device for APDU communication */
+	if (os->modem_device) {
+		int rc = openwrt_open_modem_device(os);
+		if (rc < 0) {
+			LOGP(DMAIN, LOGL_NOTICE, "Failed to open modem device for APDU: %d\n", rc);
+			LOGP(DMAIN, LOGL_NOTICE, "APDU forwarding will be disabled\n");
+		}
+	}
+
 	return 0;
+}
+
+/***********************************************************************
+ * Router-specific configuration
+ ***********************************************************************/
+
+/* Detect if running on Zbtlink ZBT-Z8102AX router */
+static bool is_zbt_z8102ax(void)
+{
+	FILE *fp;
+	char model[256];
+	bool is_zbt = false;
+	
+	fp = fopen("/tmp/sysinfo/model", "r");
+	if (!fp)
+		fp = fopen("/proc/device-tree/model", "r");
+	
+	if (fp) {
+		if (fgets(model, sizeof(model), fp)) {
+			if (strstr(model, "ZBT-Z8102AX") || strstr(model, "zbt-z8102ax")) {
+				is_zbt = true;
+			}
+		}
+		fclose(fp);
+	}
+	
+	return is_zbt;
+}
+
+/* Apply ZBT-Z8102AX specific GPIO configuration */
+static void apply_zbt_z8102ax_config(struct openwrt_state *os)
+{
+	LOGP(DMAIN, LOGL_INFO, "Detected Zbtlink ZBT-Z8102AX router - applying specific GPIO configuration\n");
+	
+	if (os->dual_modem_mode) {
+		/* Use ZBT-Z8102AX GPIO mappings for dual-modem setup */
+		LOGP(DMAIN, LOGL_INFO, "Applying ZBT-Z8102AX dual-modem GPIO mappings:\n");
+		LOGP(DMAIN, LOGL_INFO, "  Modem 1: SIM GPIO=%d, Power GPIO=%d\n",
+		     ZBT_Z8102AX_SIM1_GPIO, ZBT_Z8102AX_5G1_POWER_GPIO);
+		LOGP(DMAIN, LOGL_INFO, "  Modem 2: SIM GPIO=%d, Power GPIO=%d\n",
+		     ZBT_Z8102AX_SIM2_GPIO, ZBT_Z8102AX_5G2_POWER_GPIO);
+		
+		/* Apply if not overridden by environment */
+		if (!getenv("MODEM1_SIM_GPIO"))
+			os->modem1.sim_switch_gpio = ZBT_Z8102AX_SIM1_GPIO;
+		if (!getenv("MODEM1_RESET_GPIO"))
+			os->modem1.reset_gpio = ZBT_Z8102AX_5G1_POWER_GPIO;
+		if (!getenv("MODEM2_SIM_GPIO"))
+			os->modem2.sim_switch_gpio = ZBT_Z8102AX_SIM2_GPIO;
+		if (!getenv("MODEM2_RESET_GPIO"))
+			os->modem2.reset_gpio = ZBT_Z8102AX_5G2_POWER_GPIO;
+			
+		/* Update legacy variables for compatibility */
+		os->sim_switch_gpio = os->modem1.sim_switch_gpio;
+		os->modem_reset_gpio = os->modem1.reset_gpio;
+	} else {
+		/* Single modem mode - use modem 1 GPIOs */
+		LOGP(DMAIN, LOGL_INFO, "Applying ZBT-Z8102AX single-modem GPIO mappings:\n");
+		LOGP(DMAIN, LOGL_INFO, "  SIM GPIO=%d, Power GPIO=%d\n",
+		     ZBT_Z8102AX_SIM1_GPIO, ZBT_Z8102AX_5G1_POWER_GPIO);
+		
+		os->sim_switch_gpio = ZBT_Z8102AX_SIM1_GPIO;
+		os->modem_reset_gpio = ZBT_Z8102AX_5G1_POWER_GPIO;
+	}
+	
+	/* Enable PCIe power for modems if not already done by system */
+	int pcie_power_gpio = ZBT_Z8102AX_PCIE_POWER_GPIO;
+	gpio_export(pcie_power_gpio);
+	gpio_set_direction(pcie_power_gpio, "out");
+	gpio_set_value(pcie_power_gpio, 1);  /* Enable PCIe power */
+	LOGP(DMAIN, LOGL_INFO, "Enabled PCIe power (GPIO %d) for modems\n", pcie_power_gpio);
 }
 
 /***********************************************************************
@@ -493,6 +756,11 @@ int client_user_main(struct bankd_client *g_client)
 		if (g_client->cfg->usb.path) {
 			os->modem_device = talloc_strdup(os, g_client->cfg->usb.path);
 		}
+	}
+
+	/* Auto-detect and apply router-specific configuration */
+	if (is_zbt_z8102ax()) {
+		apply_zbt_z8102ax_config(os);
 	}
 
 	openwrt_init_modem(os);
