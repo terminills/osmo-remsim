@@ -22,7 +22,7 @@ which is set by the --enable-libsctp/--disable-libsctp configure options.
  #include <osmocom/core/linuxlist.h>
 --- a/src/core/osmo_io_uring.c
 +++ b/src/core/osmo_io_uring.c
-@@ -38,7 +38,9 @@
+@@ -38,6 +38,8 @@
  #include <limits.h>
  
  #include <netinet/in.h>

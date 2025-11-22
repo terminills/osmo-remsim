@@ -31,7 +31,7 @@ diff --git a/configure.ac b/configure.ac
 index f8e5c5e..3a7e8d3 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -124,6 +124,16 @@ if test "x$enable_libsctp" != "xno"; then
+@@ -124,6 +124,13 @@ if test "x$enable_libsctp" != "xno"; then
  fi
  AM_CONDITIONAL(ENABLE_LIBSCTP, test "x$enable_libsctp" != "xno")
  
