@@ -8,75 +8,76 @@ This patch removes both #ifdef HAVE_LIBSCTP blocks that guard these functions, m
 always available. Internal SCTP-specific operations remain conditional with appropriate
 fallbacks for non-SCTP builds.
 
---- a/src/core/socket.c	2025-11-22 22:19:45.884436034 +0000
-+++ b/src/core/socket.c	2025-11-22 22:20:02.647269708 +0000
-@@ -1894,7 +1894,6 @@
+--- a/src/core/socket.c	2025-11-22 22:23:26.043296928 +0000
++++ b/src/core/socket.c	2025-11-22 22:24:36.678601329 +0000
+@@ -1894,7 +1894,7 @@
  	return 0;
  }
  
 -#ifdef HAVE_LIBSCTP
++
  /*! Get multiple IP addresses and/or port number on socket in separate string buffers
   *  \param[in] fd file descriptor of socket.
   *  \param[out] ip_proto IPPROTO of the socket, eg: IPPROTO_SCTP.
-@@ -1931,6 +1930,8 @@
+@@ -1930,6 +1930,8 @@
+ 	void *addr_buf;
  	int rc;
  
- 	switch (ip_proto) {
-+
 +#ifdef HAVE_LIBSCTP
++
+ 	switch (ip_proto) {
  	case IPPROTO_SCTP:
  		break; /* continue below */
- 	default:
-@@ -1982,6 +1983,16 @@
- free_addrs_ret:
+@@ -1983,6 +1985,14 @@
  	local ? sctp_freeladdrs(addrs) : sctp_freepaddrs(addrs);
  	return rc;
-+
-+#else
-+/* When SCTP is disabled, fall back to single-address function for all protocols */
-+if (*ip_cnt == 0) {
-+*ip_cnt = 1;
-+return 0;
-+}
-+*ip_cnt = 1;
-+return osmo_sock_get_ip_and_port(fd, ip, ip_len, port, port_len, local);
-+#endif
  }
++#else
++	/* When SCTP is disabled, fall back to single-address function for all protocols */
++	if (*ip_cnt == 0) {
++		*ip_cnt = 1;
++		return 0;
++	}
++	*ip_cnt = 1;
++	return osmo_sock_get_ip_and_port(fd, ip, ip_len, port, port_len, local);
  #endif
  
-@@ -2046,7 +2057,6 @@
+ /*! Get local IP address on socket
+@@ -2046,7 +2056,7 @@
  	return talloc_asprintf(ctx, "(%s)", str);
  }
  
 -#ifdef HAVE_LIBSCTP
++
  /*! Format multiple IP addresses and/or port number into a combined string buffer
   *  \param[out] str  Destination string buffer.
   *  \param[in] str_len  sizeof(str), usually OSMO_SOCK_MULTIADDR_PEER_STR_MAXLEN.
-@@ -2111,6 +2121,7 @@
+@@ -2111,12 +2121,19 @@
  		return sb.chars_needed;
  	}
  
-+n#ifdef HAVE_LIBSCTP
++
++#ifdef HAVE_LIBSCTP
  	switch (sk_proto) {
  	case IPPROTO_SCTP:
  		break; /* continue below */
-@@ -2120,6 +2131,11 @@
+ 	default:
+ 		return osmo_sock_get_name_buf(str, str_len, fd);
+ 	}
++#else
++	/* When SCTP is disabled, fall back to single-address function for all protocols */
++	(void)sk_proto; /* Suppress unused parameter warning */
++	return osmo_sock_get_name_buf(str, str_len, fd);
++#endif
  
  	/* get remote */
  	OSMO_STRBUF_PRINTF(sb, "r=");
-+#else
-+/* When SCTP is disabled, fall back to single-address function for all protocols */
-+(void)sk_proto; /* Suppress unused parameter warning */
-+return osmo_sock_get_name_buf(str, str_len, fd);
-+#endif
- 	if (osmo_sock_multiaddr_get_ip_and_port(fd, sk_proto, &hostbuf[0][0], &num_hostbuf,
- 						sizeof(hostbuf[0]), portbuf, sizeof(portbuf), false) != 0) {
- 		OSMO_STRBUF_PRINTF(sb, "NULL");
-@@ -2152,7 +2168,6 @@
+@@ -2152,7 +2169,7 @@
  
  	return sb.chars_needed;
  }
 -#endif
++
  
  /*! Get address/port information on socket in provided string buffer, like "r=1.2.3.4:5<->l=6.7.8.9:10".
   * This does not include braces like osmo_sock_get_name().
