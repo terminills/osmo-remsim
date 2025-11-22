@@ -548,6 +548,10 @@ build_osmocom_dependencies() {
     
     # Build libosmocore
     local libosmocore_opts="--disable-doxygen"
+    # Disable SCTP support for OpenWRT builds (netinet/sctp.h not available)
+    if [ "$OPENWRT_MODE" -eq 1 ]; then
+        libosmocore_opts="$libosmocore_opts --disable-libsctp"
+    fi
     build_dependency \
         "libosmocore" \
         "https://git.osmocom.org/libosmocore" \
@@ -556,11 +560,16 @@ build_osmocom_dependencies() {
         "https://github.com/osmocom/libosmocore.git"
     
     # Build libosmo-netif
+    local libosmonetif_opts="--disable-doxygen"
+    # Disable SCTP support for OpenWRT builds (netinet/sctp.h not available)
+    if [ "$OPENWRT_MODE" -eq 1 ]; then
+        libosmonetif_opts="$libosmonetif_opts --disable-libsctp"
+    fi
     build_dependency \
         "libosmo-netif" \
         "https://git.osmocom.org/libosmo-netif" \
         "master" \
-        "--disable-doxygen" \
+        "$libosmonetif_opts" \
         "https://github.com/osmocom/libosmo-netif.git"
     
     # Build simtrace2 (for client-st2 support)
