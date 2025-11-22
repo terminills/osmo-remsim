@@ -358,6 +358,13 @@ build_dependency() {
         log_success "Patches applied successfully"
     fi
     
+    # Clean any previous build artifacts to avoid architecture mismatch
+    # This is critical for cross-compilation to prevent mixing host and target object files
+    if [ -f "Makefile" ]; then
+        log_info "Cleaning previous build artifacts for $name..."
+        make distclean 2>/dev/null || make clean 2>/dev/null || true
+    fi
+    
     # Build and install
     log_info "Building $name..."
     autoreconf -fi
@@ -434,6 +441,15 @@ build_talloc() {
     
     # Move to talloc subdirectory for build
     cd lib/talloc
+    
+    # Clean any previous build artifacts to avoid architecture mismatch
+    # This is critical for cross-compilation to prevent mixing host and target object files
+    log_info "Cleaning previous build artifacts for talloc..."
+    if [ -x "../../buildtools/bin/waf" ]; then
+        ../../buildtools/bin/waf distclean 2>/dev/null || true
+    fi
+    # Also remove any leftover files from previous builds
+    rm -rf bin build .lock-waf* .waf* cache.txt 2>/dev/null || true
     
     # Build and install
     log_info "Building talloc..."
@@ -618,6 +634,13 @@ build_osmocom_dependencies() {
         # Build from host/ subdirectory
         cd host
         log_info "Building simtrace2 host component..."
+        
+        # Clean any previous build artifacts to avoid architecture mismatch
+        if [ -f "Makefile" ]; then
+            log_info "Cleaning previous build artifacts for simtrace2..."
+            make distclean 2>/dev/null || make clean 2>/dev/null || true
+        fi
+        
         autoreconf -fi
         export PKG_CONFIG_PATH="${INST_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}"
         export LD_LIBRARY_PATH="${INST_DIR}/lib:${LD_LIBRARY_PATH}"

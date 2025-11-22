@@ -337,6 +337,25 @@ The patch mechanism in the build script:
 - Patches are applied in alphanumeric order (e.g., 0001-*.patch, 0002-*.patch)
 - If a dependency is already cloned, patches are reapplied on each build by resetting the repository first
 
+#### Technical Details: Build Artifact Cleanup for Cross-Compilation
+
+When switching from a native build to cross-compilation (or vice versa), stale build artifacts can cause "Relocations in generic ELF" errors. The build script automatically handles this:
+
+**Problem**: If you build for native architecture first, then run `./build.sh --openwrt`, the linker may try to link object files from different architectures:
+- Example error: `Relocations in generic ELF (EM: 62)` means x86-64 object files (EM: 62) are being linked with aarch64 target
+- This happens because old `.o` files from native build are still present when cross-compiling
+
+**Solution**: The build script automatically cleans build artifacts before building each dependency:
+- For autoconf-based builds (libosmocore, libosmo-netif, simtrace2): runs `make distclean` or `make clean` if Makefile exists
+- For waf-based builds (talloc): runs `waf distclean` and removes build directories (`bin/`, `build/`, `.lock-waf*`, `.waf*`)
+- Cleanup happens before `autoreconf`/`configure` to ensure a clean build environment
+
+**Best Practice**: If you encounter architecture mismatch errors, you can manually clean with:
+```bash
+./build.sh --clean  # Clean osmo-remsim build artifacts
+rm -rf deps/        # Clean all dependency build artifacts (most thorough)
+```
+
 ### bankd Build Failure
 
 There's a known issue with duplicate case labels in `src/bankd/bankd_main.c`. If you encounter this:
