@@ -10,30 +10,26 @@ directory. This is useful for:
 The examples directory is still built by default to maintain backward
 compatibility.
 
-diff --git a/Makefile.am b/Makefile.am
-index a1b2c3f..e6f7c8d 100644
 --- a/Makefile.am
 +++ b/Makefile.am
 @@ -1,7 +1,11 @@
  AUTOMAKE_OPTIONS = foreign dist-bzip2 1.6
+ ACLOCAL_AMFLAGS = -I m4
  
+-SUBDIRS = include src examples utils tests
 +if ENABLE_EXAMPLES
 +EXAMPLES_DIR = examples
 +endif
 +
- SUBDIRS = \
- 	include \
- 	src \
--	examples \
-+	$(EXAMPLES_DIR) \
- 	$(NULL)
-diff --git a/configure.ac b/configure.ac
-index f8e5c5e..3a7e8d3 100644
++SUBDIRS = include src $(EXAMPLES_DIR) utils tests
+ 
+ pkgconfigdir = $(libdir)/pkgconfig
+ pkgconfig_DATA = libosmo-netif.pc
 --- a/configure.ac
 +++ b/configure.ac
-@@ -124,6 +124,13 @@ if test "x$enable_libsctp" != "xno"; then
- fi
- AM_CONDITIONAL(ENABLE_LIBSCTP, test "x$enable_libsctp" != "xno")
+@@ -114,6 +114,13 @@ AS_IF([test "x$ENABLE_LIBSCTP" = "xyes"], [
+ 	LIBS=$old_LIBS
+ ])
  
 +AC_ARG_ENABLE([examples],
 +	[AS_HELP_STRING([--disable-examples],
@@ -42,6 +38,6 @@ index f8e5c5e..3a7e8d3 100644
 +	[enable_examples=yes])
 +AM_CONDITIONAL(ENABLE_EXAMPLES, test "x$enable_examples" = "xyes")
 +
- dnl checks for header files
- AC_HEADER_STDC
- AC_CHECK_HEADERS(execinfo.h sys/select.h sys/socket.h syslog.h ctype.h)
+ found_pcap=yes
+ AC_CHECK_HEADERS(pcap.h,,found_pcap=no)
+ AM_CONDITIONAL(HAVE_PCAP, test "$found_pcap" = yes)
