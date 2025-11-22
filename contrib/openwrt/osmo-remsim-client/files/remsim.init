@@ -1,5 +1,5 @@
 #!/bin/sh /etc/rc.common
-# Copyright (C) 2024 OpenWRT
+# Copyright (C) 2024 OpenWrt
 
 START=95
 STOP=10

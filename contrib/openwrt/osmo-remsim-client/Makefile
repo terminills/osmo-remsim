@@ -77,7 +77,7 @@ define Package/osmo-remsim-client/install
 	$(INSTALL_BIN) ./files/remsim.init $(1)/etc/init.d/remsim
 
 	$(INSTALL_DIR) $(1)/usr/share/osmo-remsim
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/contrib/openwrt-event-script.sh $(1)/usr/share/osmo-remsim/
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/contrib/openwrt-event-script.sh $(1)/usr/share/osmo-remsim/openwrt-event-script.sh
 endef
 
 define Package/osmo-remsim-client/postinst

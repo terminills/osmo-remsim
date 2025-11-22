@@ -218,6 +218,7 @@ echo ""
 
 CLIENT_IPKS=$(find bin/ -name "osmo-remsim-client*.ipk" 2>/dev/null || true)
 LUCI_IPKS=$(find bin/ -name "luci-app-remsim*.ipk" 2>/dev/null || true)
+ALL_IPKS=$(find bin/ \( -name "osmo-remsim-client*.ipk" -o -name "luci-app-remsim*.ipk" \) 2>/dev/null || true)
 
 if [ -n "$CLIENT_IPKS" ]; then
     log_success "Client package(s) built:"
@@ -236,6 +237,12 @@ fi
 echo ""
 log_success "Build complete!"
 log_info "To install on your router:"
-log_info "  1. Transfer IPK files: scp bin/packages/*/osmo-remsim*.ipk root@router:/tmp/"
+if [ -n "$CLIENT_IPKS" ] && [ -n "$LUCI_IPKS" ]; then
+    log_info "  1. Transfer IPK files: scp $CLIENT_IPKS $LUCI_IPKS root@router:/tmp/"
+elif [ -n "$CLIENT_IPKS" ]; then
+    log_info "  1. Transfer IPK files: scp $CLIENT_IPKS root@router:/tmp/"
+elif [ -n "$LUCI_IPKS" ]; then
+    log_info "  1. Transfer IPK files: scp $LUCI_IPKS root@router:/tmp/"
+fi
 log_info "  2. SSH to router: ssh root@router"
-log_info "  3. Install: opkg install /tmp/osmo-remsim-client*.ipk /tmp/luci-app-remsim*.ipk"
+log_info "  3. Install: opkg install /tmp/*.ipk"
