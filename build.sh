@@ -379,7 +379,9 @@ build_dependency() {
     if [ "$OPENWRT_MODE" -eq 1 ]; then
         export CFLAGS="-I${INST_DIR}/include ${CFLAGS}"
         export CPPFLAGS="-I${INST_DIR}/include ${CPPFLAGS}"
-        export LDFLAGS="-L${INST_DIR}/lib ${LDFLAGS}"
+        # Add both -L (library search path) and -Wl,-rpath-link (transitive dependency path for cross-compilation)
+        # The rpath-link is critical for the linker to find indirect dependencies like libosmoisdn during libosmocore build
+        export LDFLAGS="-L${INST_DIR}/lib -Wl,-rpath-link=${INST_DIR}/lib ${LDFLAGS}"
     fi
     
     # Add --host flag for cross-compilation in OpenWRT mode
@@ -463,7 +465,8 @@ build_talloc() {
     if [ "$OPENWRT_MODE" -eq 1 ]; then
         export CFLAGS="-I${INST_DIR}/include ${CFLAGS}"
         export CPPFLAGS="-I${INST_DIR}/include ${CPPFLAGS}"
-        export LDFLAGS="-L${INST_DIR}/lib ${LDFLAGS}"
+        # Add both -L (library search path) and -Wl,-rpath-link (transitive dependency path for cross-compilation)
+        export LDFLAGS="-L${INST_DIR}/lib -Wl,-rpath-link=${INST_DIR}/lib ${LDFLAGS}"
         
         # Validate CC variable is set
         if [ -z "$CC" ]; then
@@ -651,7 +654,8 @@ build_osmocom_dependencies() {
             # Add CFLAGS/LDFLAGS for OpenWRT cross-compilation
             export CFLAGS="-I${INST_DIR}/include ${CFLAGS}"
             export CPPFLAGS="-I${INST_DIR}/include ${CPPFLAGS}"
-            export LDFLAGS="-L${INST_DIR}/lib ${LDFLAGS}"
+            # Add both -L (library search path) and -Wl,-rpath-link (transitive dependency path for cross-compilation)
+            export LDFLAGS="-L${INST_DIR}/lib -Wl,-rpath-link=${INST_DIR}/lib ${LDFLAGS}"
             local host_triplet="${CC%-gcc}"
             ./configure --host="$host_triplet" --prefix="${INST_DIR}"
         else
@@ -731,7 +735,8 @@ setup_openwrt_environment() {
     # Include both toolchain (build dependencies) and target (runtime) paths
     export CFLAGS="-I${toolchain_dir}/usr/include -I${target_dir}/usr/include ${CFLAGS:-}"
     export CPPFLAGS="-I${toolchain_dir}/usr/include -I${target_dir}/usr/include ${CPPFLAGS:-}"
-    export LDFLAGS="-L${toolchain_dir}/usr/lib -L${target_dir}/usr/lib ${LDFLAGS:-}"
+    # Add -Wl,-rpath-link for both directories to help linker find transitive dependencies during cross-compilation
+    export LDFLAGS="-L${toolchain_dir}/usr/lib -L${target_dir}/usr/lib -Wl,-rpath-link=${toolchain_dir}/usr/lib -Wl,-rpath-link=${target_dir}/usr/lib ${LDFLAGS:-}"
     
     log_success "OpenWRT environment configured for: $arch"
 }
