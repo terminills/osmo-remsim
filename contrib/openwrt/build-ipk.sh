@@ -135,10 +135,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Validate SDK path
-# Priority: 1) --sdk command line option (already sets OPENWRT_SDK_PATH)
-#           2) OPENWRT_SDK_PATH environment variable
+# Priority: 1) --sdk command line option (already sets OPENWRT_SDK_PATH during arg parsing)
+#           2) OPENWRT_SDK_PATH environment variable (if set, used directly)
 #           3) Git submodule at ./openwrt-sdk (checked only if OPENWRT_SDK_PATH not set)
-# This mirrors the git submodule detection from build.sh
+#
+# Note: This differs from build.sh which has no command line option and checks
+# git submodule first, then environment variable. Here, explicit user input
+# (--sdk or env var) takes precedence over auto-detection (git submodule).
 if [ -z "$OPENWRT_SDK_PATH" ]; then
     # Option 1: Check for git submodule (for nightly builds and version control)
     if [ -d "${REPO_ROOT}/openwrt-sdk" ] && [ -d "${REPO_ROOT}/openwrt-sdk/staging_dir" ]; then
@@ -147,18 +150,20 @@ if [ -z "$OPENWRT_SDK_PATH" ]; then
     else
         log_error "OpenWrt SDK not found!"
         log_info ""
-        log_info "Option 1 - Use git submodule (recommended for automated builds):"
-        log_info "  git submodule add <sdk-repo-url> openwrt-sdk"
-        log_info "  git submodule update --init --recursive"
+        log_info "Please provide the OpenWrt SDK path using one of these methods:"
         log_info ""
-        log_info "Option 2 - Download and set environment variable:"
-        log_info "  # Download OpenWrt SDK for your target architecture"
-        log_info "  wget https://downloads.openwrt.org/snapshots/targets/<target>/<subtarget>/openwrt-sdk-*.tar.xz"
-        log_info "  tar xf openwrt-sdk-*.tar.xz"
-        log_info "  export OPENWRT_SDK_PATH=\$(pwd)/openwrt-sdk-*"
+        log_info "1. Git submodule (recommended for automated/reproducible builds):"
+        log_info "   git submodule add <sdk-repo-url> openwrt-sdk"
+        log_info "   git submodule update --init --recursive"
         log_info ""
-        log_info "Option 3 - Use --sdk command line option:"
-        log_info "  ./build-ipk.sh --sdk /path/to/openwrt-sdk"
+        log_info "2. Environment variable:"
+        log_info "   # Download OpenWrt SDK for your target architecture"
+        log_info "   wget https://downloads.openwrt.org/snapshots/targets/<target>/<subtarget>/openwrt-sdk-*.tar.xz"
+        log_info "   tar xf openwrt-sdk-*.tar.xz"
+        log_info "   export OPENWRT_SDK_PATH=\$(pwd)/openwrt-sdk-*"
+        log_info ""
+        log_info "3. Command line option (overrides above methods):"
+        log_info "   ./build-ipk.sh --sdk /path/to/openwrt-sdk"
         exit 1
     fi
 fi
