@@ -10,12 +10,12 @@ which is set by the --enable-libsctp/--disable-libsctp configure options.
 --- a/src/core/osmo_io_internal.h
 +++ b/src/core/osmo_io_internal.h
 @@ -4,7 +4,9 @@
- #include <osmocom/core/osmo_io.h>
- #include <osmocom/core/msgb.h>
  
+ #include <unistd.h>
+ #include <stdbool.h>
 +#ifdef ENABLE_LIBSCTP
  #include <netinet/sctp.h>
 +#endif
  
- #define LOGPIO(iofd, level, fmt, args...) \
- 	LOGP(iofd->msgb_alloc.ctx, level, fmt, ## args)
+ #include <osmocom/core/osmo_io.h>
+ #include <osmocom/core/linuxlist.h>
