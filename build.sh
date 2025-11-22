@@ -46,6 +46,7 @@ if [ -z "$JOBS" ]; then
         JOBS=1
     fi
 fi
+export JOBS
 
 PARALLEL_MAKE="-j${JOBS}"
 
@@ -437,16 +438,97 @@ build_talloc() {
             exit 1
         fi
         
-        # Extract host triplet from CC variable
+        # Extract host triplet and architecture from CC variable
         local host_triplet="${CC%-gcc}"
-        log_info "Cross-compiling talloc for: $host_triplet"
-        ./configure --host="$host_triplet" --prefix="${INST_DIR}"
+        # Extract architecture - first field of triplet (e.g., aarch64-openwrt-linux -> aarch64)
+        # This works for standard GNU triplets (arch-vendor-os or arch-os)
+        local arch
+        arch=$(echo "$host_triplet" | cut -d'-' -f1)
+        log_info "Cross-compiling talloc for: $host_triplet (architecture: $arch)"
+        
+        # Create cross-answers cache file for waf cross-compilation
+        # Based on OpenWRT's libtalloc package: https://github.com/openwrt/packages/blob/master/libs/libtalloc/Makefile
+        # These answers are for configure tests that can't be executed during cross-compilation
+        # Format: "Test description: result" where result can be:
+        #   - OK/YES: test passes
+        #   - NO/FAIL: test fails
+        #   - (returncode, "output"): specific exit code and output
+        #   - "value": string value result
+        cat > cache.txt << 'EOF'
+Checking simple C program: "hello world"
+rpath library support: (127, "")
+-Wl,--version-script support: (127, "")
+Checking getconf LFS_CFLAGS: NO
+Checking for large file support without additional flags: OK
+Checking correct behavior of strtoll: OK
+Checking for working strptime: NO
+Checking for C99 vsnprintf: "1"
+Checking for HAVE_SHARED_MMAP: NO
+Checking for HAVE_MREMAP: NO
+Checking for HAVE_INCOHERENT_MMAP: (2, "")
+Checking for HAVE_SECURE_MKSTEMP: OK
+EOF
+        
+        # Add uname information specific to target architecture
+        # Note: Kernel version 5.10.0 is used as a generic LTS version
+        # The exact version doesn't affect talloc compilation, but waf needs some value
+        cat >> cache.txt << EOF
+Checking uname machine type: "${arch}"
+Checking uname release type: "5.10.0"
+Checking uname sysname type: "Linux"
+Checking uname version type: "#1 SMP"
+EOF
+        
+        # Use waf directly for cross-compilation (talloc uses waf build system, not autoconf)
+        # The waf executable is in the Samba repository at buildtools/bin/waf
+        # This path is relative to lib/talloc/ where we are currently located
+        local waf_bin="../../buildtools/bin/waf"
+        if [ ! -x "$waf_bin" ]; then
+            log_error "Waf executable not found at $waf_bin"
+            log_error "Expected location for talloc 2.4.2 from Samba repository"
+            log_error "Current directory: $(pwd)"
+            exit 1
+        fi
+        
+        # Set PYTHONHASHSEED for reproducible builds
+        # Waf uses Python and this ensures deterministic ordering of hash-based operations
+        export PYTHONHASHSEED=1
+        
+        log_info "Running waf configure..."
+        if ! "$waf_bin" configure \
+            --prefix="${INST_DIR}" \
+            --cross-compile \
+            --cross-answers=cache.txt \
+            --disable-python \
+            --disable-rpath \
+            --disable-rpath-install; then
+            log_error "Waf configure failed for talloc cross-compilation"
+            log_error "Check cache.txt answers or cross-compilation environment"
+            exit 1
+        fi
+        
+        log_info "Running waf build..."
+        # Waf uses the JOBS environment variable for parallel builds, not make-style -j flags
+        # Set JOBS based on the number of CPUs (already set at script start)
+        if ! "$waf_bin" build; then
+            log_error "Waf build failed for talloc"
+            exit 1
+        fi
+        
+        log_info "Running waf install..."
+        if ! "$waf_bin" install; then
+            log_error "Waf install failed for talloc"
+            exit 1
+        fi
+        
+        # Clean up cross-answers cache file
+        rm -f cache.txt
     else
+        # Native build - use standard configure wrapper
         ./configure --prefix="${INST_DIR}"
+        make ${PARALLEL_MAKE}
+        make install
     fi
-    
-    make ${PARALLEL_MAKE}
-    make install
     
     log_success "Built and installed: talloc ${version}"
     cd "${BASE_DIR}"

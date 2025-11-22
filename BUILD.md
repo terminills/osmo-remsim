@@ -316,6 +316,14 @@ Common issues:
 
 **Note**: The build script automatically downloads and cross-compiles talloc as a dependency when building for OpenWRT, so you don't need to have it pre-installed in the SDK.
 
+#### Technical Details: Talloc Cross-Compilation
+
+Talloc uses the Waf build system (not autoconf), which requires special handling for cross-compilation:
+- The build script uses `waf configure` directly with `--cross-compile` flag
+- A pre-filled cross-answers file (`cache.txt`) is generated with known test results
+- Python support is disabled (`--disable-python`) to avoid Python cross-compilation complexity
+- This approach is based on the [official OpenWRT libtalloc package](https://github.com/openwrt/packages/blob/master/libs/libtalloc/Makefile)
+
 ### bankd Build Failure
 
 There's a known issue with duplicate case labels in `src/bankd/bankd_main.c`. If you encounter this:
