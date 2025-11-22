@@ -43,8 +43,8 @@ git diff > /path/to/osmo-remsim/patches/libosmocore/0001-my-patch.patch
 
 #### 0001-make-sctp-include-conditional.patch
 - **Purpose**: Fix OpenWRT build failure due to missing `netinet/sctp.h`
-- **Details**: Makes the SCTP header include conditional on `ENABLE_LIBSCTP` being defined
-- **Affects**: `src/core/osmo_io_internal.h`
+- **Details**: Makes the SCTP header include conditional on `HAVE_LIBSCTP` being defined
+- **Affects**: `src/core/osmo_io_internal.h` and `src/core/osmo_io_uring.c`
 - **When applied**: Always (harmless on systems with SCTP support)
 
 ## Notes

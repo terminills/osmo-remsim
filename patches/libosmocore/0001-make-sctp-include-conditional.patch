@@ -1,10 +1,11 @@
 From: osmo-remsim build script <build@osmo-remsim>
-Subject: Make SCTP header include conditional in osmo_io_internal.h
+Subject: Make SCTP header include conditional
 
-The osmo_io_internal.h header unconditionally includes netinet/sctp.h,
-which causes build failures on systems without SCTP support (e.g., OpenWRT).
+The osmo_io_internal.h and osmo_io_uring.c files unconditionally include
+netinet/sctp.h, which causes build failures on systems without SCTP support
+(e.g., OpenWRT).
 
-This patch makes the include conditional on ENABLE_LIBSCTP being defined,
+This patch makes the include conditional on HAVE_LIBSCTP being defined,
 which is set by the --enable-libsctp/--disable-libsctp configure options.
 
 --- a/src/core/osmo_io_internal.h
@@ -13,9 +14,20 @@ which is set by the --enable-libsctp/--disable-libsctp configure options.
  
  #include <unistd.h>
  #include <stdbool.h>
-+#ifdef ENABLE_LIBSCTP
++#ifdef HAVE_LIBSCTP
  #include <netinet/sctp.h>
 +#endif
  
  #include <osmocom/core/osmo_io.h>
  #include <osmocom/core/linuxlist.h>
+--- a/src/core/osmo_io_uring.c
++++ b/src/core/osmo_io_uring.c
+@@ -38,7 +38,9 @@
+ #include <limits.h>
+ 
+ #include <netinet/in.h>
++#ifdef HAVE_LIBSCTP
+ #include <netinet/sctp.h>
++#endif
+ #include <sys/eventfd.h>
+ #include <liburing.h>
