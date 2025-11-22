@@ -324,13 +324,17 @@ Talloc uses the Waf build system (not autoconf), which requires special handling
 - Python support is disabled (`--disable-python`) to avoid Python cross-compilation complexity
 - This approach is based on the [official OpenWRT libtalloc package](https://github.com/openwrt/packages/blob/master/libs/libtalloc/Makefile)
 
-#### Technical Details: SCTP Support in OpenWRT
+#### Technical Details: Library Support in OpenWRT
 
-OpenWRT environments typically do not include SCTP (Stream Control Transmission Protocol) support by default. The build script automatically handles this:
-- When building for OpenWRT (`--openwrt` flag), the script adds `--disable-libsctp` to libosmocore and libosmo-netif configure options
+OpenWRT environments have a minimal set of libraries and headers compared to full Linux distributions. The build script automatically handles this:
+- When building for OpenWRT (`--openwrt` flag), the script adds several disable flags to libosmocore and libosmo-netif configure options:
+  - `--disable-libsctp` - SCTP (Stream Control Transmission Protocol) support
+  - `--disable-libmnl` - Netlink library support
+  - `--disable-uring` - io_uring async I/O support
+  - `--disable-gnutls` - GnuTLS library (used as getrandom() fallback in libosmocore)
 - A patch is automatically applied to libosmocore to make the `netinet/sctp.h` include conditional (see `patches/libosmocore/0001-make-sctp-include-conditional.patch`)
-- This prevents build failures due to missing `netinet/sctp.h` header file
-- SCTP-related features in these libraries will be unavailable, but they are not required for the osmo-remsim client functionality
+- This prevents build failures due to missing header files in the OpenWRT SDK
+- These features are not required for the osmo-remsim client functionality on OpenWRT routers
 
 The patch mechanism in the build script:
 - Automatically applies patches from `patches/<dependency-name>/` directories before building each dependency
