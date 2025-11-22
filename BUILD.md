@@ -123,6 +123,8 @@ export OPENWRT_SDK_PATH=$(pwd)/openwrt-sdk-*
 
 The built binary will be at: `src/client/osmo-remsim-client-openwrt`
 
+For detailed information about OpenWRT builds, including common issues and solutions, see [doc/OPENWRT-BUILD-NOTES.md](doc/OPENWRT-BUILD-NOTES.md).
+
 ### Building Custom Forks
 
 If you're working with a custom fork that has modified dependencies or additional components not in the upstream version:

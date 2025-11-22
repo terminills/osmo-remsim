@@ -1,0 +1,101 @@
+name: OpenWRT Build Test
+
+on:
+  push:
+    branches: [ main, master, copilot/** ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-openwrt:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Install build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          git \
+          autoconf \
+          automake \
+          libtool \
+          pkg-config \
+          python3 \
+          python3-pip \
+          wget \
+          curl \
+          xz-utils
+    
+    - name: Cache OpenWRT SDK
+      id: cache-sdk
+      uses: actions/cache@v4
+      with:
+        path: openwrt-sdk
+        key: openwrt-sdk-23.05.6-mediatek-filogic-gcc-12.3.0
+        
+    - name: Download OpenWRT SDK
+      if: steps.cache-sdk.outputs.cache-hit != 'true'
+      run: |
+        echo "Downloading OpenWRT SDK for mediatek/filogic target..."
+        wget -q https://downloads.openwrt.org/releases/23.05.6/targets/mediatek/filogic/openwrt-sdk-23.05.6-mediatek-filogic_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+        
+        echo "Extracting SDK..."
+        tar xf openwrt-sdk-23.05.6-mediatek-filogic_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+        
+        echo "Creating symlink for consistent path..."
+        mv openwrt-sdk-23.05.6-mediatek-filogic_gcc-12.3.0_musl.Linux-x86_64 openwrt-sdk
+        
+        echo "SDK structure:"
+        ls -la openwrt-sdk/
+        ls -la openwrt-sdk/staging_dir/
+    
+    - name: Set OpenWRT environment
+      run: |
+        echo "OPENWRT_SDK_PATH=${{ github.workspace }}/openwrt-sdk" >> $GITHUB_ENV
+        
+    - name: Build with OpenWRT SDK
+      run: |
+        export OPENWRT_SDK_PATH=${{ github.workspace }}/openwrt-sdk
+        echo "Building osmo-remsim for OpenWRT..."
+        echo "SDK Path: $OPENWRT_SDK_PATH"
+        
+        # Run the build script
+        ./build.sh --openwrt
+        
+    - name: Check build artifacts
+      if: success()
+      run: |
+        echo "Build succeeded! Checking artifacts..."
+        find src/client -name "osmo-remsim-client-*" -type f -executable
+        ls -lh src/client/
+        
+    - name: Upload build artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: openwrt-build-artifacts
+        path: |
+          src/client/osmo-remsim-client-*
+          deps/install/
+        retention-days: 7
+        
+    - name: Upload SDK for reuse
+      if: steps.cache-sdk.outputs.cache-hit != 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: openwrt-sdk
+        path: openwrt-sdk/
+        retention-days: 30
+        
+    - name: Show build logs on failure
+      if: failure()
+      run: |
+        echo "Build failed. Showing recent build output..."
+        # The build.sh script should have shown errors already
+        echo "Checking for config.log files..."
+        find . -name config.log -exec echo "=== {} ===" \; -exec tail -100 {} \;

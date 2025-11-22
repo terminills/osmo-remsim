@@ -615,9 +615,9 @@ build_osmocom_dependencies() {
     
     # Build libosmocore
     local libosmocore_opts="--disable-doxygen"
-    # Disable SCTP, libmnl, io_uring, GnuTLS, PCSC, and libusb support for OpenWRT builds (headers/libraries not available)
+    # OpenWRT: disable unavailable features (SCTP, USB, PCSC, etc.) and unnecessary components (utilities, systemd)
     if [ "$OPENWRT_MODE" -eq 1 ]; then
-        libosmocore_opts="$libosmocore_opts --disable-libsctp --disable-libmnl --disable-uring --disable-gnutls --disable-pcsc --disable-libusb"
+        libosmocore_opts="$libosmocore_opts --disable-libsctp --disable-libmnl --disable-uring --disable-gnutls --disable-pcsc --disable-libusb --disable-utilities --disable-systemd-logging"
     fi
     build_dependency \
         "libosmocore" \
@@ -628,9 +628,9 @@ build_osmocom_dependencies() {
     
     # Build libosmo-netif
     local libosmonetif_opts="--disable-doxygen"
-    # Disable SCTP support for OpenWRT builds (netinet/sctp.h not available)
+    # OpenWRT: disable SCTP (unavailable) and examples (not needed, causes linking issues)
     if [ "$OPENWRT_MODE" -eq 1 ]; then
-        libosmonetif_opts="$libosmonetif_opts --disable-libsctp"
+        libosmonetif_opts="$libosmonetif_opts --disable-libsctp --disable-examples"
     fi
     build_dependency \
         "libosmo-netif" \

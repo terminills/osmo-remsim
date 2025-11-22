@@ -1,0 +1,47 @@
+From: osmo-remsim build script <build@osmo-remsim>
+Subject: Add --disable-examples configure option
+
+Add a configure option to optionally disable building the examples
+directory. This is useful for:
+1. Cross-compilation scenarios where examples may have linking issues
+2. Embedded/OpenWRT builds where examples are not needed
+3. Faster builds when only the library is required
+
+The examples directory is still built by default to maintain backward
+compatibility.
+
+diff --git a/Makefile.am b/Makefile.am
+index a1b2c3f..e6f7c8d 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -1,7 +1,11 @@
+ AUTOMAKE_OPTIONS = foreign dist-bzip2 1.6
+ 
++if ENABLE_EXAMPLES
++EXAMPLES_DIR = examples
++endif
++
+ SUBDIRS = \
+ 	include \
+ 	src \
+-	examples \
++	$(EXAMPLES_DIR) \
+ 	$(NULL)
+diff --git a/configure.ac b/configure.ac
+index f8e5c5e..3a7e8d3 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -124,6 +124,16 @@ if test "x$enable_libsctp" != "xno"; then
+ fi
+ AM_CONDITIONAL(ENABLE_LIBSCTP, test "x$enable_libsctp" != "xno")
+ 
++AC_ARG_ENABLE([examples],
++	[AS_HELP_STRING([--disable-examples],
++		[Disable building example programs (default: enabled)])],
++	[enable_examples=$enableval],
++	[enable_examples=yes])
++AM_CONDITIONAL(ENABLE_EXAMPLES, test "x$enable_examples" = "xyes")
++
+ dnl checks for header files
+ AC_HEADER_STDC
+ AC_CHECK_HEADERS(execinfo.h sys/select.h sys/socket.h syslog.h ctype.h)
