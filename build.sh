@@ -403,7 +403,8 @@ build_talloc() {
     else
         log_info "Cloning Samba repository at tag $tag..."
         # Clone with sparse checkout to minimize download size
-        git clone --depth 1 --filter=blob:none --sparse --branch "$tag" "$repo_url" "$name"
+        # Suppress detached HEAD advice since we intentionally checkout a tag
+        git -c advice.detachedHead=false clone --depth 1 --filter=blob:none --sparse --branch "$tag" "$repo_url" "$name"
         cd "$name"
         # Checkout only the directories needed for talloc build
         git sparse-checkout set lib/talloc lib/replace lib/ccan buildtools third_party/waf
