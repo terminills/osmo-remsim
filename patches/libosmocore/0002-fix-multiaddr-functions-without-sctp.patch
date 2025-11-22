@@ -1,0 +1,58 @@
+From: osmo-remsim build script <build@osmo-remsim>
+Subject: Fix multiaddr functions when SCTP is disabled
+
+The functions osmo_sock_multiaddr_get_name_buf() and 
+osmo_multiaddr_ip_and_port_snprintf() are always compiled and exported,
+but they call osmo_sock_multiaddr_get_ip_and_port() which is only
+compiled when HAVE_LIBSCTP is defined.
+
+This causes undefined reference errors during linking when libosmocore
+is built with --disable-libsctp, particularly affecting libosmo-netif
+which uses these functions.
+
+Solution: Move osmo_sock_multiaddr_get_ip_and_port() outside the
+#ifdef HAVE_LIBSCTP block, but keep the SCTP-specific implementation
+guarded. When SCTP is disabled, the function falls back to the
+regular osmo_sock_get_ip_and_port() for all protocols.
+
+This maintains API compatibility while avoiding undefined references.
+
+diff --git a/src/core/socket.c b/src/core/socket.c
+index 915c70e..dc2dbe3 100644
+--- a/src/core/socket.c
++++ b/src/core/socket.c
+@@ -1894,7 +1894,6 @@ int osmo_sock_get_ip_and_port(int fd, char *ip, size_t ip_len, char *port, size_
+ 	return 0;
+ }
+ 
+-#ifdef HAVE_LIBSCTP
+ /*! Get multiple IP addresses and/or port number on socket in separate string buffers
+  *  \param[in] fd file descriptor of socket.
+  *  \param[out] ip_proto IPPROTO of the socket, eg: IPPROTO_SCTP.
+@@ -1930,6 +1929,8 @@ int osmo_sock_multiaddr_get_ip_and_port(int fd, int ip_proto, char *ip, size_t *
+ 	void *addr_buf;
+ 	int rc;
+ 
++#ifdef HAVE_LIBSCTP
++
+ 	switch (ip_proto) {
+ 	case IPPROTO_SCTP:
+ 		break; /* continue below */
+@@ -1982,8 +1983,16 @@ int osmo_sock_multiaddr_get_ip_and_port(int fd, int ip_proto, char *ip, size_t *
+ free_addrs_ret:
+ 	local ? sctp_freeladdrs(addrs) : sctp_freepaddrs(addrs);
+ 	return rc;
+-}
++#else
++	/* When SCTP is disabled, fall back to single-address function for all protocols */
++	if (*ip_cnt == 0) {
++		*ip_cnt = 1;
++		return 0;
++	}
++	*ip_cnt = 1;
++	return osmo_sock_get_ip_and_port(fd, ip, ip_len, port, port_len, local);
+ #endif
++}
+ 
+ /*! Get local IP address on socket
+  *  \param[in] fd file descriptor of socket
