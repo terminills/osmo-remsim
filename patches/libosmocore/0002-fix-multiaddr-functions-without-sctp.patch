@@ -8,18 +8,17 @@ This patch removes both #ifdef HAVE_LIBSCTP blocks that guard these functions, m
 always available. Internal SCTP-specific operations remain conditional with appropriate
 fallbacks for non-SCTP builds.
 
---- a/src/core/socket.c	2025-11-22 22:23:26.043296928 +0000
-+++ b/src/core/socket.c	2025-11-22 22:24:36.678601329 +0000
-@@ -1894,7 +1894,7 @@
+--- a/src/core/socket.c
++++ b/src/core/socket.c
+@@ -1894,7 +1894,6 @@
  	return 0;
  }
  
 -#ifdef HAVE_LIBSCTP
-+
  /*! Get multiple IP addresses and/or port number on socket in separate string buffers
   *  \param[in] fd file descriptor of socket.
   *  \param[out] ip_proto IPPROTO of the socket, eg: IPPROTO_SCTP.
-@@ -1930,6 +1930,8 @@
+@@ -1930,6 +1929,8 @@
  	void *addr_buf;
  	int rc;
  
@@ -28,10 +27,11 @@ fallbacks for non-SCTP builds.
  	switch (ip_proto) {
  	case IPPROTO_SCTP:
  		break; /* continue below */
-@@ -1983,6 +1985,14 @@
+@@ -1983,8 +1984,16 @@
+ free_addrs_ret:
  	local ? sctp_freeladdrs(addrs) : sctp_freepaddrs(addrs);
  	return rc;
- }
+-}
 +#else
 +	/* When SCTP is disabled, fall back to single-address function for all protocols */
 +	if (*ip_cnt == 0) {
@@ -41,18 +41,19 @@ fallbacks for non-SCTP builds.
 +	*ip_cnt = 1;
 +	return osmo_sock_get_ip_and_port(fd, ip, ip_len, port, port_len, local);
  #endif
++}
  
  /*! Get local IP address on socket
-@@ -2046,7 +2056,7 @@
+  *  \param[in] fd file descriptor of socket
+@@ -2046,7 +2055,6 @@
  	return talloc_asprintf(ctx, "(%s)", str);
  }
  
 -#ifdef HAVE_LIBSCTP
-+
  /*! Format multiple IP addresses and/or port number into a combined string buffer
   *  \param[out] str  Destination string buffer.
   *  \param[in] str_len  sizeof(str), usually OSMO_SOCK_MULTIADDR_PEER_STR_MAXLEN.
-@@ -2111,12 +2121,19 @@
+@@ -2111,12 +2119,19 @@
  		return sb.chars_needed;
  	}
  
@@ -72,12 +73,11 @@ fallbacks for non-SCTP builds.
  
  	/* get remote */
  	OSMO_STRBUF_PRINTF(sb, "r=");
-@@ -2152,7 +2169,7 @@
+@@ -2152,7 +2167,6 @@
  
  	return sb.chars_needed;
  }
 -#endif
-+
  
  /*! Get address/port information on socket in provided string buffer, like "r=1.2.3.4:5<->l=6.7.8.9:10".
   * This does not include braces like osmo_sock_get_name().
