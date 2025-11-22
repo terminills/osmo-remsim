@@ -55,8 +55,12 @@ git diff > /path/to/osmo-remsim/patches/libosmocore/0001-my-patch.patch
 - **Purpose**: Fix OpenWRT build issues - deprecated header warnings and missing SCTP support
 - **Details**: 
   1. Replaces deprecated `<sys/fcntl.h>` with POSIX-standard `<fcntl.h>` in source files
-  2. Makes SCTP header includes conditional on `HAVE_LIBSCTP` being defined
-- **Affects**: `src/datagram.c`, `src/stream_cli.c`, `src/stream.c`, `src/stream_srv.c`, `include/osmocom/netif/sctp.h`
+  2. Makes SCTP header includes and function declarations conditional on `HAVE_LIBSCTP`
+  3. Guards SCTP-specific function calls in stream_cli.c and stream_srv.c
+  4. Protects SCTP-only connection setup code with compile-time checks
+- **Affects**: 
+  - Headers: `include/osmocom/netif/sctp.h`, `include/osmocom/netif/stream_private.h`
+  - Sources: `src/datagram.c`, `src/stream_cli.c`, `src/stream.c`, `src/stream_srv.c`
 - **When applied**: Always (eliminates warnings and build failures on OpenWRT with --disable-libsctp)
 
 ## Notes

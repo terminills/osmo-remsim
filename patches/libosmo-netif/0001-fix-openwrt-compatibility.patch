@@ -99,18 +99,21 @@ index 3e1d775..eeea2cd 100644
 +
 +#endif /* HAVE_LIBSCTP */
 diff --git a/include/osmocom/netif/stream_private.h b/include/osmocom/netif/stream_private.h
-index 154e7f7..a241a17 100644
+index 154e7f7..bbc3a95 100644
 --- a/include/osmocom/netif/stream_private.h
 +++ b/include/osmocom/netif/stream_private.h
-@@ -54,11 +54,13 @@ int stream_setsockopt_tcp_user_timeout(int fd, unsigned int user_timeout);
+@@ -54,11 +54,15 @@ int stream_setsockopt_tcp_user_timeout(int fd, unsigned int user_timeout);
  struct osmo_io_fd;
  struct msghdr;
  
-+#ifdef HAVE_LIBSCTP
++/* Functions with fallbacks for non-SCTP builds - always available */
  int stream_sctp_sock_activate_events(int fd);
  int stream_setsockopt_nodelay(int fd, int proto, int on);
- int stream_sctp_recvmsg_wrapper(int fd, struct msgb *msg, const char *log_pfx);
+-int stream_sctp_recvmsg_wrapper(int fd, struct msgb *msg, const char *log_pfx);
  
++#ifdef HAVE_LIBSCTP
++/* Pure SCTP functions - only available when SCTP is enabled */
++int stream_sctp_recvmsg_wrapper(int fd, struct msgb *msg, const char *log_pfx);
  int stream_iofd_sctp_send_msgb(struct osmo_io_fd *iofd, struct msgb *msg, int sendmsg_flags);
  int stream_iofd_sctp_recvmsg_trailer(struct osmo_io_fd *iofd, struct msgb *msg, int ret, const struct msghdr *msgh);
 +#endif
@@ -143,7 +146,7 @@ index 339dd6a..9fed7d5 100644
  #include <sys/ioctl.h>
  #include <arpa/inet.h>
 diff --git a/src/stream_cli.c b/src/stream_cli.c
-index c623fff..96253d7 100644
+index c623fff..6aeb0db 100644
 --- a/src/stream_cli.c
 +++ b/src/stream_cli.c
 @@ -26,7 +26,7 @@
@@ -165,8 +168,20 @@ index c623fff..96253d7 100644
  
  /*! \file stream_cli.c */
  
+@@ -1383,9 +1385,11 @@ void osmo_stream_cli_send(struct osmo_stream_cli *cli, struct msgb *msg)
+ 	case OSMO_STREAM_MODE_OSMO_IO:
+ 		/* whenever osmo_stream_cli_is_connected() [see above check], we should have an iofd */
+ 		OSMO_ASSERT(cli->iofd);
++#ifdef HAVE_LIBSCTP
+ 		if (cli->proto == IPPROTO_SCTP)
+ 			rc = stream_iofd_sctp_send_msgb(cli->iofd, msg, MSG_NOSIGNAL);
+ 		else
++#endif
+ 			rc = osmo_iofd_write_msgb(cli->iofd, msg);
+ 		if (rc < 0)
+ 			msgb_free(msg);
 diff --git a/src/stream_srv.c b/src/stream_srv.c
-index 695a46f..b77f4cd 100644
+index 695a46f..e67acb7 100644
 --- a/src/stream_srv.c
 +++ b/src/stream_srv.c
 @@ -26,7 +26,7 @@
@@ -195,3 +210,15 @@ index 695a46f..b77f4cd 100644
  		conn->iofd = osmo_iofd_setup(conn, fd, conn->sockname, OSMO_IO_FD_MODE_READ_WRITE,
  					     &srv_ioops, conn);
  	}
+@@ -1369,9 +1372,11 @@ void osmo_stream_srv_send(struct osmo_stream_srv *conn, struct msgb *msg)
+ 		osmo_fd_write_enable(&conn->ofd);
+ 		break;
+ 	case OSMO_STREAM_MODE_OSMO_IO:
++#ifdef HAVE_LIBSCTP
+ 		if (conn->srv->proto == IPPROTO_SCTP)
+ 			rc = stream_iofd_sctp_send_msgb(conn->iofd, msg, MSG_NOSIGNAL);
+ 		else
++#endif
+ 			rc = osmo_iofd_write_msgb(conn->iofd, msg);
+ 		if (rc < 0)
+ 			msgb_free(msg);
