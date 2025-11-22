@@ -63,13 +63,13 @@ Options:
   --jobs N            Number of parallel build jobs
 
 Environment Variables:
-  OPENWRT_SDK_PATH    Path to OpenWrt SDK (required if --sdk not specified and no git submodule)
+  OPENWRT_SDK_PATH    Path to OpenWrt SDK (optional if using git submodule or --sdk)
   BUILD_JOBS          Number of parallel jobs (default: auto-detect)
 
-SDK Detection (in order):
-  1. Git submodule: checks for openwrt-sdk/ directory in repository root
-  2. Environment variable: OPENWRT_SDK_PATH
-  3. Command line option: --sdk PATH
+SDK Path Resolution (priority order):
+  1. Command line: --sdk PATH (overrides all other methods)
+  2. Environment: OPENWRT_SDK_PATH (if set, skips git submodule check)
+  3. Auto-detect: git submodule at ./openwrt-sdk/ (checked if above are not set)
 
 Examples:
   # Build all packages (auto-detect SDK from git submodule or environment)
