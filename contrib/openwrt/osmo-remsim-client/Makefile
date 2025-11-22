@@ -34,7 +34,6 @@ define Package/osmo-remsim-client
   TITLE:=Osmocom Remote SIM - OpenWRT Client
   URL:=https://osmocom.org/projects/osmo-remsim
   DEPENDS:=+libosmocore +libosmo-netif +libosmo-gsm +libpthread +librt
-  PKGARCH:=all
 endef
 
 define Package/osmo-remsim-client/description
@@ -62,14 +61,6 @@ CONFIGURE_ARGS += \
 
 TARGET_CFLAGS += -I$(STAGING_DIR)/usr/include
 TARGET_LDFLAGS += -L$(STAGING_DIR)/usr/lib
-
-define Build/Compile
-	$(MAKE) -C $(PKG_BUILD_DIR) \
-		$(TARGET_CONFIGURE_OPTS) \
-		CFLAGS="$(TARGET_CFLAGS)" \
-		LDFLAGS="$(TARGET_LDFLAGS)" \
-		all
-endef
 
 define Package/osmo-remsim-client/install
 	$(INSTALL_DIR) $(1)/usr/bin
