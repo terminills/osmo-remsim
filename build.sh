@@ -381,6 +381,76 @@ build_dependency() {
     cd "${BASE_DIR}"
 }
 
+# Build talloc from git repository
+build_talloc() {
+    local version="2.4.2"
+    local tag="talloc-${version}"
+    local repo_url="https://github.com/samba-team/samba.git"
+    local name="samba-talloc"
+    
+    log_info "Building talloc ${version} for OpenWRT cross-compilation..."
+    
+    mkdir -p "${DEPS_DIR}"
+    cd "${DEPS_DIR}"
+    
+    # Clone or update full Samba repository at the specific tag
+    # We need multiple lib directories for talloc to build (replace, ccan, etc.)
+    if [ -d "$name" ]; then
+        log_info "Updating existing repository: $name"
+        cd "$name"
+        git fetch origin "refs/tags/${tag}:refs/tags/${tag}" 2>/dev/null || true
+        git checkout "$tag"
+    else
+        log_info "Cloning Samba repository at tag $tag..."
+        # Clone with sparse checkout to minimize download size
+        git clone --depth 1 --filter=blob:none --sparse --branch "$tag" "$repo_url" "$name"
+        cd "$name"
+        # Checkout only the directories needed for talloc build
+        git sparse-checkout set lib/talloc lib/replace lib/ccan buildtools third_party/waf
+    fi
+    
+    # Move to talloc subdirectory for build
+    cd lib/talloc
+    
+    # Build and install
+    log_info "Building talloc..."
+    
+    # Setup PKG_CONFIG_PATH and LD_LIBRARY_PATH for dependencies
+    export PKG_CONFIG_PATH="${INST_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}"
+    export LD_LIBRARY_PATH="${INST_DIR}/lib:${LD_LIBRARY_PATH}"
+    export PATH="${INST_DIR}/bin:${PATH}"
+    
+    # In OpenWRT mode, add our install directory to CFLAGS/LDFLAGS
+    if [ "$OPENWRT_MODE" -eq 1 ]; then
+        export CFLAGS="-I${INST_DIR}/include ${CFLAGS}"
+        export CPPFLAGS="-I${INST_DIR}/include ${CPPFLAGS}"
+        export LDFLAGS="-L${INST_DIR}/lib ${LDFLAGS}"
+        
+        # Validate CC variable is set
+        if [ -z "$CC" ]; then
+            log_error "CC environment variable is not set for cross-compilation"
+            exit 1
+        fi
+        if [[ ! "$CC" =~ -gcc$ ]]; then
+            log_error "CC variable does not follow expected pattern (*-gcc): $CC"
+            exit 1
+        fi
+        
+        # Extract host triplet from CC variable
+        local host_triplet="${CC%-gcc}"
+        log_info "Cross-compiling talloc for: $host_triplet"
+        ./configure --host="$host_triplet" --prefix="${INST_DIR}"
+    else
+        ./configure --prefix="${INST_DIR}"
+    fi
+    
+    make ${PARALLEL_MAKE}
+    make install
+    
+    log_success "Built and installed: talloc ${version}"
+    cd "${BASE_DIR}"
+}
+
 # Download and build Osmocom dependencies
 build_osmocom_dependencies() {
     log_info "Building Osmocom dependencies..."
@@ -390,13 +460,7 @@ build_osmocom_dependencies() {
     # Build talloc (required by libosmocore) when in OpenWRT mode
     # In non-OpenWRT mode, use system talloc
     if [ "$OPENWRT_MODE" -eq 1 ]; then
-        log_info "Building talloc for OpenWRT cross-compilation..."
-        build_dependency \
-            "talloc" \
-            "https://git.samba.org/talloc.git" \
-            "talloc-2.4.2" \
-            "" \
-            "https://github.com/samba-team/talloc.git"
+        build_talloc
     fi
     
     # Build libosmocore
