@@ -40,9 +40,6 @@ index f8e5c5e..3a7e8d3 100644
 +		[Disable building example programs (default: enabled)])],
 +	[enable_examples=$enableval],
 +	[enable_examples=yes])
-+if test "x$enable_examples" = "xyes"; then
-+	AC_DEFINE([BUILD_EXAMPLES], [1], [Define to 1 to build examples])
-+fi
 +AM_CONDITIONAL(ENABLE_EXAMPLES, test "x$enable_examples" = "xyes")
 +
  dnl checks for header files
