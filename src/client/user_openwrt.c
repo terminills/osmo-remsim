@@ -103,9 +103,6 @@ struct openwrt_state {
 	/* Modem communication */
 	struct osmo_fd modem_ofd;
 	bool modem_fd_registered;
-	struct msgb *modem_rx_msg;
-	uint8_t pending_apdu[1024];
-	size_t pending_apdu_len;
 };
 
 static struct openwrt_state *g_openwrt_state = NULL;
@@ -352,14 +349,21 @@ int frontend_append_script_env(struct bankd_client *bc, char **env, int idx, siz
  * Modem Interface Functions
  ***********************************************************************/
 
-/* Convert binary data to hex string for AT+CSIM command */
-static char *bin_to_hex_str(const uint8_t *data, size_t len)
+/* Convert binary data to hex string for AT+CSIM command
+ * Caller must free returned string with talloc_free() */
+static char *bin_to_hex_str(void *ctx, const uint8_t *data, size_t len)
 {
-	static char hex_str[2048];
+	char *hex_str;
 	size_t i;
 	
-	if (len * 2 >= sizeof(hex_str)) {
+	if (len > 512) {
 		LOGP(DMAIN, LOGL_ERROR, "Data too long for hex conversion: %zu bytes\n", len);
+		return NULL;
+	}
+	
+	hex_str = talloc_zero_size(ctx, len * 2 + 1);
+	if (!hex_str) {
+		LOGP(DMAIN, LOGL_ERROR, "Failed to allocate hex string buffer\n");
 		return NULL;
 	}
 	
@@ -402,7 +406,7 @@ static int modem_fd_cb(struct osmo_fd *ofd, unsigned int what)
 {
 	struct openwrt_state *os = ofd->data;
 	struct bankd_client *bc = os->bc;
-	char buf[1024];
+	char buf[2048];
 	int rc;
 	
 	if (!(what & OSMO_FD_READ))
@@ -419,7 +423,12 @@ static int modem_fd_cb(struct osmo_fd *ofd, unsigned int what)
 		return 0;
 	}
 	
+	/* Ensure buffer is null-terminated, accounting for possible full read */
+	if (rc >= sizeof(buf)) {
+		rc = sizeof(buf) - 1;
+	}
 	buf[rc] = '\0';
+	
 	LOGP(DMAIN, LOGL_DEBUG, "Modem response: %s\n", buf);
 	
 	/* Parse AT+CSIM response: +CSIM: <length>,"<response>" */
@@ -428,7 +437,8 @@ static int modem_fd_cb(struct osmo_fd *ofd, unsigned int what)
 		int resp_len;
 		char hex_resp[1024];
 		
-		if (sscanf(csim_start, "+CSIM: %d,\"%[^\"]\"", &resp_len, hex_resp) == 2) {
+		/* Use limited width in sscanf to prevent buffer overflow */
+		if (sscanf(csim_start, "+CSIM: %d,\"%1023[^\"]\"", &resp_len, hex_resp) == 2) {
 			uint8_t apdu_resp[512];
 			int parsed_len;
 			
@@ -458,6 +468,7 @@ static int openwrt_send_tpdu_to_modem(struct openwrt_state *os, const uint8_t *d
 {
 	char *hex_data;
 	char at_cmd[2048];
+	size_t at_cmd_len;
 	int rc;
 	
 	LOGP(DMAIN, LOGL_DEBUG, "Sending TPDU to modem: %s\n", osmo_hexdump(data, len));
@@ -468,7 +479,7 @@ static int openwrt_send_tpdu_to_modem(struct openwrt_state *os, const uint8_t *d
 	}
 	
 	/* Convert APDU to hex string */
-	hex_data = bin_to_hex_str(data, len);
+	hex_data = bin_to_hex_str(os, data, len);
 	if (!hex_data) {
 		LOGP(DMAIN, LOGL_ERROR, "Failed to convert APDU to hex string\n");
 		return -EINVAL;
@@ -477,18 +488,28 @@ static int openwrt_send_tpdu_to_modem(struct openwrt_state *os, const uint8_t *d
 	/* Build AT+CSIM command
 	 * Format: AT+CSIM=<length>,"<command>"
 	 * Length is the number of characters in the hex string */
-	snprintf(at_cmd, sizeof(at_cmd), "AT+CSIM=%zu,\"%s\"\r\n", len * 2, hex_data);
+	at_cmd_len = snprintf(at_cmd, sizeof(at_cmd), "AT+CSIM=%zu,\"%s\"\r\n", len * 2, hex_data);
+	
+	/* Free the hex string buffer */
+	talloc_free(hex_data);
+	
+	/* Verify the command fits in the buffer */
+	if (at_cmd_len >= sizeof(at_cmd)) {
+		LOGP(DMAIN, LOGL_ERROR, "AT command too long: %zu bytes (max %zu)\n", 
+		     at_cmd_len, sizeof(at_cmd));
+		return -ENOSPC;
+	}
 	
 	LOGP(DMAIN, LOGL_DEBUG, "Sending AT command to modem: %s", at_cmd);
 	
-	rc = write(os->modem_ofd.fd, at_cmd, strlen(at_cmd));
+	rc = write(os->modem_ofd.fd, at_cmd, at_cmd_len);
 	if (rc < 0) {
 		LOGP(DMAIN, LOGL_ERROR, "Failed to write to modem: %s\n", strerror(errno));
 		return -errno;
 	}
 	
-	if ((size_t)rc != strlen(at_cmd)) {
-		LOGP(DMAIN, LOGL_ERROR, "Incomplete write to modem: %d/%zu\n", rc, strlen(at_cmd));
+	if ((size_t)rc != at_cmd_len) {
+		LOGP(DMAIN, LOGL_ERROR, "Incomplete write to modem: %d/%zu\n", rc, at_cmd_len);
 		return -EIO;
 	}
 	
@@ -519,6 +540,8 @@ static int openwrt_open_modem_device(struct openwrt_state *os)
 	
 	if (osmo_fd_register(&os->modem_ofd) < 0) {
 		LOGP(DMAIN, LOGL_ERROR, "Failed to register modem fd with osmocom select\n");
+		/* Clean up the osmo_fd structure before closing */
+		memset(&os->modem_ofd, 0, sizeof(os->modem_ofd));
 		close(fd);
 		return -EIO;
 	}
