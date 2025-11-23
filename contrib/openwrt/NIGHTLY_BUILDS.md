@@ -8,8 +8,10 @@ Nightly builds are automatically generated every day at 2 AM UTC and are availab
 
 ### Download from GitHub Actions
 
-1. Go to the Actions tab (`https://github.com/<owner>/<repo>/actions/workflows/nightly-ipk-build.yml`) in the repository
-2. Click on the latest successful workflow run
+1. Go to the repository on GitHub
+2. Click the "Actions" tab
+3. Select "Nightly IPK Build" from the workflows list
+4. Click on the latest successful workflow run
 3. Scroll down to the "Artifacts" section
 4. Download the IPK package archive for your architecture:
    - `ipk-packages-23.05.6-mediatek-filogic-<run-number>` - For MediaTek MT7986 (aarch64)
