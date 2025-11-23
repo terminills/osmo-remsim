@@ -56,7 +56,7 @@ CROSS = " \
 
 define Build/Configure
 	(cd $(PKG_BUILD_DIR); \
-		echo -e >cache.txt $(CROSS) " \
+		printf >cache.txt $(CROSS) " \
 			\nChecking uname machine type: \"$(ARCH)\" \
 			\nChecking uname release type: \"$(LINUX_VERSION)\" \
 			\nChecking uname sysname type: \"Linux\" \

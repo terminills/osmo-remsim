@@ -338,9 +338,22 @@ LUCI_IPKS=$(find bin/ -name "luci-app-remsim*.ipk" 2>/dev/null || true)
 
 if [ -n "$TALLOC_IPKS" ] || [ -n "$OSMOCORE_IPKS" ] || [ -n "$OSMONETIF_IPKS" ]; then
     log_success "Dependency package(s) built:"
-    for ipk in $TALLOC_IPKS $OSMOCORE_IPKS $OSMONETIF_IPKS; do
-        echo "  - $ipk ($(du -h "$ipk" | cut -f1))"
-    done
+    # Iterate through each set of IPKs separately to avoid word splitting issues
+    if [ -n "$TALLOC_IPKS" ]; then
+        for ipk in $TALLOC_IPKS; do
+            echo "  - $ipk ($(du -h "$ipk" | cut -f1))"
+        done
+    fi
+    if [ -n "$OSMOCORE_IPKS" ]; then
+        for ipk in $OSMOCORE_IPKS; do
+            echo "  - $ipk ($(du -h "$ipk" | cut -f1))"
+        done
+    fi
+    if [ -n "$OSMONETIF_IPKS" ]; then
+        for ipk in $OSMONETIF_IPKS; do
+            echo "  - $ipk ($(du -h "$ipk" | cut -f1))"
+        done
+    fi
 fi
 
 if [ -n "$CLIENT_IPKS" ]; then
