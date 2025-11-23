@@ -812,8 +812,8 @@ build_osmo_remsim() {
     # Configure
     log_info "Configuring osmo-remsim with options: $configure_opts"
     if [ "$OPENWRT_MODE" -eq 1 ]; then
-        # Cross-compilation for OpenWRT
-        ./configure --host="${CC%-gcc}" $configure_opts
+        # Cross-compilation for OpenWRT - install to staging directory
+        ./configure --host="${CC%-gcc}" --prefix="${INST_DIR}" $configure_opts
     else
         ./configure $configure_opts
     fi
@@ -821,6 +821,14 @@ build_osmo_remsim() {
     # Build
     log_info "Compiling osmo-remsim..."
     make ${PARALLEL_MAKE}
+    
+    # Install to staging directory in OpenWRT mode
+    # This is necessary so that libosmo-rspro.so.2 is available for the client
+    if [ "$OPENWRT_MODE" -eq 1 ]; then
+        log_info "Installing osmo-remsim to staging directory: ${INST_DIR}"
+        make install
+        log_success "osmo-remsim installed to ${INST_DIR}"
+    fi
     
     log_success "osmo-remsim built successfully!"
 }
@@ -868,8 +876,9 @@ show_summary() {
         log_info "  - src/bankd/osmo-remsim-bankd"
         log_info "  - src/client/osmo-remsim-client-*"
     else
-        log_info "Built OpenWRT binary:"
-        log_info "  - src/client/osmo-remsim-client-openwrt"
+        log_info "Built OpenWRT components installed to: ${INST_DIR}"
+        log_info "  - Binary: bin/osmo-remsim-client-openwrt"
+        log_info "  - Library: lib/libosmo-rspro.so (and version symlinks)"
     fi
     
     if [ "$DO_INSTALL" -eq 0 ]; then
