@@ -111,8 +111,9 @@ jobs:
         EOF
         
         # List all packages with sizes
-        if find . -maxdepth 1 -name "*.ipk" -type f | head -1 | grep -q .; then
-          find . -maxdepth 1 -name "*.ipk" -type f | while IFS= read -r ipk; do
+        ipk_files=$(find . -maxdepth 1 -name "*.ipk" -type f)
+        if [ -n "$ipk_files" ]; then
+          echo "$ipk_files" | while IFS= read -r ipk; do
             echo "  - $(basename "$ipk") ($(du -h "$ipk" | cut -f1))" >> BUILD_INFO.txt
           done
         else
