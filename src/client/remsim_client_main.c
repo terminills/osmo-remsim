@@ -175,7 +175,7 @@ static void handle_options(struct client_config *cfg, int argc, char **argv)
 static void parse_openwrt_config(struct client_config *cfg, const char *config_file)
 {
 	FILE *f;
-	char line[512];
+	char line[1024];
 	char *section = NULL;
 	
 	f = fopen(config_file, "r");
@@ -208,14 +208,14 @@ static void parse_openwrt_config(struct client_config *cfg, const char *config_f
 		
 		/* Parse option: option <key> '<value>' or option <key> <value> */
 		if (strncmp(p, "option ", 7) == 0) {
-			char key[64], value[256];
+			char key[64], value[512];
 			int n;
 			
 			/* Try quoted value first */
-			n = sscanf(p, "option %63s '%255[^']'", key, value);
+			n = sscanf(p, "option %63s '%511[^']'", key, value);
 			if (n != 2) {
 				/* Try unquoted value */
-				n = sscanf(p, "option %63s %255s", key, value);
+				n = sscanf(p, "option %63s %511s", key, value);
 			}
 			
 			if (n == 2 && section) {
@@ -227,19 +227,35 @@ static void parse_openwrt_config(struct client_config *cfg, const char *config_f
 				/* Apply configuration based on section */
 				if (strcmp(section, "server") == 0) {
 					if (strcmp(key, "host") == 0) {
-						/* Trim leading/trailing spaces from host */
+						/* Trim leading and trailing spaces from host */
 						char *start = value;
-						while (*start == ' ')
+						char *end;
+						
+						while (*start == ' ' || *start == '\t')
 							start++;
+						
+						end = start + strlen(start) - 1;
+						while (end > start && (*end == ' ' || *end == '\t' || *end == '\n'))
+							*end-- = '\0';
+						
 						osmo_talloc_replace_string(cfg, &cfg->server_host, start);
 					} else if (strcmp(key, "port") == 0) {
-						cfg->server_port = atoi(value);
+						char *endptr;
+						long port = strtol(value, &endptr, 10);
+						if (*endptr == '\0' && port > 0 && port <= 65535)
+							cfg->server_port = (int)port;
 					}
 				} else if (strcmp(section, "client") == 0) {
 					if (strcmp(key, "client_id") == 0) {
-						cfg->client_id = atoi(value);
+						char *endptr;
+						long id = strtol(value, &endptr, 10);
+						if (*endptr == '\0' && id >= 0 && id <= 1023)
+							cfg->client_id = (int)id;
 					} else if (strcmp(key, "client_slot") == 0) {
-						cfg->client_slot = atoi(value);
+						char *endptr;
+						long slot = strtol(value, &endptr, 10);
+						if (*endptr == '\0' && slot >= 0 && slot <= 1023)
+							cfg->client_slot = (int)slot;
 					}
 				}
 			}
