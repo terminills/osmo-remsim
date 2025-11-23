@@ -201,6 +201,10 @@ cd "$OPENWRT_SDK_PATH"
 # when TOPDIR is computed from relative paths or contains symlinks
 export TOPDIR="$(pwd)"
 
+# Set TERM for non-interactive builds to prevent menuconfig from trying to open a terminal
+# This is essential for CI/CD environments where no terminal is available
+export TERM="${TERM:-dumb}"
+
 # Initialize SDK if not already initialized
 # The SDK needs staging_dir/host to exist before building packages
 if [ ! -d "staging_dir/host" ]; then
@@ -219,6 +223,18 @@ if [ ! -d "staging_dir/host" ]; then
         exit 1
     fi
     log_success "OpenWrt SDK initialized"
+fi
+
+# Ensure .config exists before building packages
+# When SDK is cached, staging_dir/host may exist but .config might be missing
+# This prevents the build system from trying to run menuconfig interactively
+if [ ! -f ".config" ]; then
+    log_info "Creating .config file..."
+    if ! make defconfig > /dev/null 2>&1; then
+        log_error "Failed to create .config file"
+        exit 1
+    fi
+    log_success ".config file created"
 fi
 
 # Copy package definitions to SDK
