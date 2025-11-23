@@ -876,9 +876,9 @@ show_summary() {
         log_info "  - src/bankd/osmo-remsim-bankd"
         log_info "  - src/client/osmo-remsim-client-*"
     else
-        log_info "Built OpenWRT components:"
-        log_info "  - Binary: ${INST_DIR}/bin/osmo-remsim-client-openwrt"
-        log_info "  - Library: ${INST_DIR}/lib/libosmo-rspro.so.2"
+        log_info "Built OpenWRT components installed to: ${INST_DIR}"
+        log_info "  - Binary: bin/osmo-remsim-client-openwrt"
+        log_info "  - Library: lib/libosmo-rspro.so*"
     fi
     
     if [ "$DO_INSTALL" -eq 0 ]; then
