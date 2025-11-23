@@ -190,6 +190,12 @@ log_info "Build jobs: $BUILD_JOBS"
 # Change to SDK directory and set TOPDIR for OpenWrt build system
 cd "$OPENWRT_SDK_PATH"
 
+# Unset PROMPT_DIRTRIM to prevent bash from abbreviating paths with "..."
+# This is critical because OpenWrt's Makefile system uses shell commands
+# that can be affected by this environment variable, causing paths like
+# /home/user/.../openwrt-sdk/staging_dir which fail when used literally
+unset PROMPT_DIRTRIM
+
 # Export TOPDIR as absolute path for OpenWrt's build system
 # This prevents path abbreviation issues (e.g., "..." in paths) that occur
 # when TOPDIR is computed from relative paths or contains symlinks
