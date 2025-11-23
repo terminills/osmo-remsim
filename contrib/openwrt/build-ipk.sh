@@ -187,8 +187,13 @@ log_info "OpenWrt SDK: $OPENWRT_SDK_PATH"
 log_info "Repository: $REPO_ROOT"
 log_info "Build jobs: $BUILD_JOBS"
 
-# Change to SDK directory
+# Change to SDK directory and set TOPDIR for OpenWrt build system
 cd "$OPENWRT_SDK_PATH"
+
+# Export TOPDIR as absolute path for OpenWrt's build system
+# This prevents path abbreviation issues (e.g., "..." in paths) that occur
+# when TOPDIR is computed from relative paths or contains symlinks
+export TOPDIR="$(pwd)"
 
 # Initialize SDK if not already initialized
 # The SDK needs staging_dir/host to exist before building packages
