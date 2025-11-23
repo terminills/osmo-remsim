@@ -193,7 +193,12 @@ cd "$OPENWRT_SDK_PATH"
 # The SDK needs staging_dir/host to exist before building packages
 if [ ! -d "staging_dir/host" ]; then
     log_info "Initializing OpenWrt SDK..."
-    # Run defconfig to initialize the SDK and create necessary directories
+    
+    # Create staging_dir/host directory structure
+    # This is required before running make commands on the SDK
+    mkdir -p staging_dir/host
+    
+    # Run defconfig to initialize the SDK and create necessary files
     if ! make defconfig > /dev/null 2>&1; then
         log_error "Failed to initialize OpenWrt SDK"
         log_info "This usually means the SDK is incomplete or corrupted"
