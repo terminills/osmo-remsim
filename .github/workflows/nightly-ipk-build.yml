@@ -1,0 +1,153 @@
+name: Nightly IPK Build
+
+on:
+  schedule:
+    # Run nightly at 2 AM UTC (coordinated universal time)
+    # Cron format: minute hour day-of-month month day-of-week
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    # Allow manual triggering
+
+jobs:
+  build-ipk-packages:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    
+    strategy:
+      matrix:
+        # Build for different OpenWRT versions/architectures
+        sdk:
+          - name: "23.05.6-mediatek-filogic"
+            url: "https://downloads.openwrt.org/releases/23.05.6/targets/mediatek/filogic/openwrt-sdk-23.05.6-mediatek-filogic_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+            cache-key: "openwrt-sdk-23.05.6-mediatek-filogic-gcc-12.3.0"
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Install build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          git \
+          autoconf \
+          automake \
+          libtool \
+          pkg-config \
+          python3 \
+          python3-pip \
+          wget \
+          curl \
+          xz-utils
+    
+    - name: Cache OpenWRT SDK
+      id: cache-sdk
+      uses: actions/cache@v4
+      with:
+        path: openwrt-sdk
+        key: ${{ matrix.sdk.cache-key }}
+        
+    - name: Download and extract OpenWRT SDK
+      if: steps.cache-sdk.outputs.cache-hit != 'true'
+      run: |
+        echo "Downloading OpenWRT SDK: ${{ matrix.sdk.name }}"
+        wget -q ${{ matrix.sdk.url }}
+        
+        SDK_FILENAME=$(basename ${{ matrix.sdk.url }})
+        echo "Extracting $SDK_FILENAME..."
+        tar xf "$SDK_FILENAME"
+        
+        # Create consistent symlink name
+        SDK_DIR=$(tar -tf "$SDK_FILENAME" | head -1 | cut -f1 -d"/")
+        echo "Extracted directory: $SDK_DIR"
+        mv "$SDK_DIR" openwrt-sdk
+        
+        echo "SDK structure:"
+        ls -la openwrt-sdk/ || true
+        ls -la openwrt-sdk/staging_dir/ || true
+    
+    - name: Build IPK packages
+      run: |
+        export OPENWRT_SDK_PATH="${{ github.workspace }}/openwrt-sdk"
+        echo "Building IPK packages..."
+        echo "SDK Path: $OPENWRT_SDK_PATH"
+        
+        # Run the IPK build script with verbose output
+        cd contrib/openwrt
+        ./build-ipk.sh --verbose
+        
+    - name: Collect built IPK packages
+      if: success()
+      run: |
+        echo "Collecting built IPK packages..."
+        mkdir -p ipk-packages
+        
+        # Find all IPK files in the SDK bin directory
+        cd openwrt-sdk
+        find bin/ -name "*.ipk" -exec cp {} ../ipk-packages/ \;
+        
+        echo "Built packages:"
+        ls -lh ../ipk-packages/
+        
+    - name: Generate build info
+      if: success()
+      run: |
+        cd ipk-packages
+        
+        # Create a build info file
+        cat > BUILD_INFO.txt << EOF
+        Build Information
+        ==================
+        Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+        Commit: ${{ github.sha }}
+        Branch: ${{ github.ref_name }}
+        SDK: ${{ matrix.sdk.name }}
+        Workflow: ${{ github.workflow }}
+        Run: ${{ github.run_number }}
+        
+        Packages Built:
+        EOF
+        
+        # List all packages with sizes
+        ipk_files=$(find . -maxdepth 1 -name "*.ipk" -type f)
+        if [ -n "$ipk_files" ]; then
+          echo "$ipk_files" | while IFS= read -r ipk; do
+            echo "  - $(basename "$ipk") ($(du -h "$ipk" | cut -f1))" >> BUILD_INFO.txt
+          done
+        else
+          echo "  (No IPK files found)" >> BUILD_INFO.txt
+        fi
+        
+        echo ""
+        echo "Build info generated:"
+        cat BUILD_INFO.txt
+        
+    - name: Upload IPK packages as artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ipk-packages-${{ matrix.sdk.name }}-${{ github.run_number }}
+        path: ipk-packages/
+        retention-days: 90
+        if-no-files-found: error
+        
+    - name: Show build summary
+      if: always()
+      run: |
+        echo "==================================="
+        echo "Build Summary"
+        echo "==================================="
+        echo "SDK: ${{ matrix.sdk.name }}"
+        echo "Status: ${{ job.status }}"
+        
+        if [ -d "ipk-packages" ]; then
+          echo "Packages built: $(find ipk-packages/ -name '*.ipk' -type f 2>/dev/null | wc -l)"
+          echo ""
+          echo "Package list:"
+          find ipk-packages/ -name '*.ipk' -type f 2>/dev/null | sort || echo "No packages found"
+        else
+          echo "No packages directory found"
+        fi
+        echo "==================================="

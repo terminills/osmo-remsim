@@ -2,6 +2,12 @@
 
 This directory contains OpenWrt package definitions for building IPK packages for osmo-remsim.
 
+## Quick Start
+
+**Want pre-built packages?** Download them from our [nightly builds](NIGHTLY_BUILDS.md)!
+
+Nightly builds are automatically generated every day at 2 AM UTC and available as GitHub Actions artifacts. See [NIGHTLY_BUILDS.md](NIGHTLY_BUILDS.md) for details.
+
 ## Packages
 
 ### 1. osmo-remsim-client
