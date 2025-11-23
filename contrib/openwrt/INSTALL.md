@@ -267,14 +267,15 @@ rm -rf /etc/config/remsim
 
 ## Dependencies
 
-The packages require the following libraries:
+The osmo-remsim-client package requires the following libraries:
+- libtalloc (>= 2.4.2)
 - libosmocore (>= 1.11.0)
 - libosmo-netif (>= 1.6.0)
 - libosmo-gsm (>= 1.11.0)
 - libpthread
 - librt
 
-These should be automatically installed by opkg.
+**Note:** These dependency packages are built as part of the IPK build process and must be installed before osmo-remsim-client. See the Quick Installation section for the correct installation order.
 
 ## Support
 
