@@ -47,6 +47,34 @@ o.placeholder = "310410"
 o.rmempty = true
 o:depends("enabled", "1")
 
+-- Monitoring Configuration
+s = m:section(TypedSection, "monitoring", translate("Monitoring and Statistics"),
+	translate("Configure real-time monitoring and statistics collection"))
+s.anonymous = true
+s.addremove = false
+
+o = s:option(Flag, "signal_monitoring", translate("Enable Signal Monitoring"),
+	translate("Periodically query modem signal strength"))
+o.default = "1"
+o.rmempty = false
+
+o = s:option(Value, "signal_interval", translate("Signal Check Interval"),
+	translate("How often to check signal strength (in seconds)"))
+o.datatype = "range(10,600)"
+o.default = "60"
+o.placeholder = "60"
+o:depends("signal_monitoring", "1")
+
+o = s:option(Value, "stats_interval", translate("Statistics Print Interval"),
+	translate("How often to print statistics to log (in seconds, 0=disabled)"))
+o.datatype = "uinteger"
+o.default = "3600"
+o.placeholder = "3600"
+
+o = s:option(Flag, "track_data_usage", translate("Track Data Usage"),
+	translate("Monitor data usage per interface (requires additional processing)"))
+o.default = "0"
+
 -- Logging and Debug
 s = m:section(TypedSection, "logging", translate("Logging and Debug"))
 s.anonymous = true

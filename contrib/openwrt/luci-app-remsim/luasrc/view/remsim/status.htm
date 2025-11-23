@@ -140,6 +140,96 @@ Licensed under GNU General Public License v2
 </div>
 <% end %>
 
+<!-- Statistics Card -->
+<% if statistics.available or service_status.running then %>
+<div class="status-card">
+	<h3><%:Client Statistics%></h3>
+	<div class="info-row">
+		<div class="info-label"><%:Uptime%>:</div>
+		<div class="info-value" data-stat-uptime><%=statistics.uptime%></div>
+	</div>
+	<div class="info-row">
+		<div class="info-label"><%:TPDUs Sent%>:</div>
+		<div class="info-value" data-stat-tpdus_sent><%=statistics.tpdus_sent%></div>
+	</div>
+	<div class="info-row">
+		<div class="info-label"><%:TPDUs Received%>:</div>
+		<div class="info-value" data-stat-tpdus_received><%=statistics.tpdus_received%></div>
+	</div>
+	<div class="info-row">
+		<div class="info-label"><%:Errors%>:</div>
+		<div class="info-value">
+			<% if statistics.errors > 0 then %>
+				<span style="color: #d9534f; font-weight: bold;" data-stat-errors><%=statistics.errors%></span>
+			<% else %>
+				<span data-stat-errors><%=statistics.errors%></span>
+			<% end %>
+		</div>
+	</div>
+	<div class="info-row">
+		<div class="info-label"><%:Reconnections%>:</div>
+		<div class="info-value" data-stat-reconnections><%=statistics.reconnections%></div>
+	</div>
+	<div class="info-row">
+		<div class="info-label"><%:SIM Switches%>:</div>
+		<div class="info-value" data-stat-sim_switches><%=statistics.sim_switches%></div>
+	</div>
+	
+	<div class="action-buttons">
+		<a href="javascript:printStats()" class="btn btn-primary">
+			<%:Refresh Statistics%>
+		</a>
+	</div>
+</div>
+<% end %>
+
+<!-- Signal Strength Card -->
+<% if signal_status.enabled and service_status.running then %>
+<div class="status-card">
+	<h3><%:Signal Strength Monitoring%></h3>
+	<div class="info-row">
+		<div class="info-label"><%:Monitoring%>:</div>
+		<div class="info-value">
+			<span class="status-indicator status-running"></span>
+			<strong><%:Enabled%></strong> (every <%=signal_status.interval%> seconds)
+		</div>
+	</div>
+	<% if signal_status.last_rssi then %>
+	<div class="info-row">
+		<div class="info-label"><%:Last Signal (RSSI)%>:</div>
+		<div class="info-value">
+			<strong style="font-size: 1.2em;" data-signal-rssi><%=signal_status.last_rssi%> dBm</strong>
+			<span style="margin-left: 10px;">
+				<% if signal_status.last_rssi >= -70 then %>
+					<span class="status-indicator status-running"></span>Excellent
+				<% elseif signal_status.last_rssi >= -85 then %>
+					<span class="status-indicator status-warning"></span>Good
+				<% elseif signal_status.last_rssi >= -100 then %>
+					<span class="status-indicator status-warning"></span>Fair
+				<% else %>
+					<span class="status-indicator status-stopped"></span>Poor
+				<% end %>
+			</span>
+		</div>
+	</div>
+	<% if signal_status.last_check then %>
+	<div class="info-row">
+		<div class="info-label"><%:Last Check%>:</div>
+		<div class="info-value"><%=signal_status.last_check%></div>
+	</div>
+	<% end %>
+	<% else %>
+	<div class="info-row">
+		<div class="info-label"><%:Status%>:</div>
+		<div class="info-value">
+			<span class="status-indicator status-warning"></span>
+			<em>Waiting for signal data...</em>
+		</div>
+	</div>
+	<% end %>
+</div>
+<% end %>
+
 <!-- Modem Status Card -->
 <div class="status-card">
 	<h3><%:Modem Status%></h3>
@@ -225,6 +315,72 @@ function testConnection() {
 		alert('Connection Test Result:\n\n' + data);
 	});
 }
+
+function printStats() {
+	var xhr = new XHR();
+	xhr.get('<%=url("admin/services/remsim/action_print_stats")%>', null, function(x, data) {
+		alert(data);
+		// Reload page after a short delay to show updated stats
+		setTimeout(function() {
+			window.location.reload();
+		}, 2000);
+	});
+}
+
+// Auto-refresh signal strength every 30 seconds
+<% if signal_status.enabled and service_status.running then %>
+setInterval(function() {
+	var xhr = new XHR();
+	xhr.get('<%=url("admin/services/remsim/action_get_signal")%>', null, function(x, data) {
+		if (data) {
+			try {
+				var signal = JSON.parse(data);
+				if (signal.last_rssi) {
+					// Update signal display if element exists
+					var signalElements = document.querySelectorAll('[data-signal-rssi]');
+					signalElements.forEach(function(el) {
+						el.textContent = signal.last_rssi + ' dBm';
+					});
+				}
+			} catch(e) {
+				console.error('Failed to parse signal data:', e);
+			}
+		}
+	});
+}, 30000);
+<% end %>
+
+// Auto-refresh statistics every 60 seconds
+<% if statistics.available or service_status.running then %>
+setInterval(function() {
+	var xhr = new XHR();
+	xhr.get('<%=url("admin/services/remsim/action_get_stats")%>', null, function(x, data) {
+		if (data) {
+			try {
+				var stats = JSON.parse(data);
+				// Update statistics display if elements exist
+				var statsElements = {
+					'uptime': stats.uptime,
+					'tpdus_sent': stats.tpdus_sent,
+					'tpdus_received': stats.tpdus_received,
+					'errors': stats.errors,
+					'reconnections': stats.reconnections,
+					'sim_switches': stats.sim_switches
+				};
+				
+				for (var key in statsElements) {
+					var el = document.querySelector('[data-stat-' + key + ']');
+					if (el) {
+						el.textContent = statsElements[key];
+					}
+				}
+			} catch(e) {
+				console.error('Failed to parse statistics data:', e);
+			}
+		}
+	});
+}, 60000);
+<% end %>
 </script>
 
 <%+footer%>

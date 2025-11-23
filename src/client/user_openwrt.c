@@ -28,11 +28,14 @@
 #include <string.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <time.h>
+#include <signal.h>
 
 #include <osmocom/core/select.h>
 #include <osmocom/core/utils.h>
 #include <osmocom/core/logging.h>
 #include <osmocom/core/msgb.h>
+#include <osmocom/core/timer.h>
 
 #include "client.h"
 #include "debug.h"
@@ -78,6 +81,21 @@ struct modem_config {
 	bool is_primary;  /* true = remsim modem, false = always-on IoT modem */
 };
 
+/* Statistics tracking */
+struct openwrt_stats {
+	time_t start_time;
+	uint64_t tpdus_sent;
+	uint64_t tpdus_received;
+	uint64_t errors;
+	uint32_t reconnections;
+	uint32_t sim_switches;
+	time_t last_signal_check;
+	int last_rssi;
+	int last_rsrp;
+	int last_rsrq;
+	int last_sinr;
+};
+
 /* OpenWRT-specific state */
 struct openwrt_state {
 	struct bankd_client *bc;
@@ -107,12 +125,24 @@ struct openwrt_state {
 	/* Modem communication */
 	struct osmo_fd modem_ofd;
 	bool modem_fd_registered;
+	
+	/* Statistics and monitoring */
+	struct openwrt_stats stats;
+	bool signal_monitoring_enabled;
+	int signal_check_interval;  /* seconds, 0 = disabled */
+	struct osmo_timer_list signal_timer;
 };
 
 static struct openwrt_state *g_openwrt_state = NULL;
 
 /* Forward declarations */
 static int openwrt_send_tpdu_to_modem(struct openwrt_state *os, const uint8_t *data, size_t len);
+static void openwrt_signal_timer_cb(void *data);
+static int openwrt_query_signal_strength(struct openwrt_state *os);
+static void openwrt_parse_csq_response(struct openwrt_state *os, const char *response);
+static void openwrt_print_statistics(struct openwrt_state *os);
+static void openwrt_handle_shutdown(int sig);
+static void openwrt_handle_print_stats(int sig);
 
 /***********************************************************************
  * GPIO Control Functions
@@ -237,6 +267,9 @@ int frontend_request_card_insert(struct bankd_client *bc)
 	if (rc < 0)
 		return rc;
 
+	/* Track SIM switch */
+	os->stats.sim_switches++;
+
 	/* Set GPIO to switch to remote SIM (value 1 = remote) */
 	return gpio_set_value(os->sim_switch_gpio, 1);
 }
@@ -251,6 +284,9 @@ int frontend_request_card_remove(struct bankd_client *bc)
 	rc = openwrt_gpio_init(os);
 	if (rc < 0)
 		return rc;
+
+	/* Track SIM switch */
+	os->stats.sim_switches++;
 
 	/* Set GPIO to switch to local SIM (value 0 = local) */
 	return gpio_set_value(os->sim_switch_gpio, 0);
@@ -297,6 +333,7 @@ int frontend_request_modem_reset(struct bankd_client *bc)
 int frontend_handle_card2modem(struct bankd_client *bc, const uint8_t *data, size_t len)
 {
 	struct openwrt_state *os = bc->data;
+	int rc;
 	
 	OSMO_ASSERT(data);
 	OSMO_ASSERT(os);
@@ -304,7 +341,15 @@ int frontend_handle_card2modem(struct bankd_client *bc, const uint8_t *data, siz
 	LOGP(DMAIN, LOGL_DEBUG, "Card->Modem APDU: %s\n", osmo_hexdump(data, len));
 
 	/* Forward the APDU to the modem via AT+CSIM command */
-	return openwrt_send_tpdu_to_modem(os, data, len);
+	rc = openwrt_send_tpdu_to_modem(os, data, len);
+	
+	if (rc == 0) {
+		os->stats.tpdus_sent++;
+	} else {
+		os->stats.errors++;
+	}
+	
+	return rc;
 }
 
 int frontend_handle_set_atr(struct bankd_client *bc, const uint8_t *data, size_t len)
@@ -438,6 +483,12 @@ static int modem_fd_cb(struct osmo_fd *ofd, unsigned int what)
 	
 	LOGP(DMAIN, LOGL_DEBUG, "Modem response: %s\n", buf);
 	
+	/* Parse AT+CSQ response for signal strength */
+	char *csq_start = strstr(buf, "+CSQ:");
+	if (csq_start) {
+		openwrt_parse_csq_response(os, csq_start);
+	}
+	
 	/* Parse AT+CSIM response: +CSIM: <length>,"<response>" */
 	char *csim_start = strstr(buf, "+CSIM:");
 	if (csim_start) {
@@ -461,6 +512,9 @@ static int modem_fd_cb(struct osmo_fd *ofd, unsigned int what)
 				
 				LOGP(DMAIN, LOGL_INFO, "Forwarding APDU response from modem: %s\n",
 				     osmo_hexdump(apdu_resp, parsed_len));
+				
+				/* Track statistics */
+				os->stats.tpdus_received++;
 				
 				/* Forward APDU response to bankd via main FSM */
 				osmo_fsm_inst_dispatch(bc->main_fi, MF_E_MDM_TPDU, &ftpdu);
@@ -509,14 +563,22 @@ static int openwrt_send_tpdu_to_modem(struct openwrt_state *os, const uint8_t *d
 	
 	LOGP(DMAIN, LOGL_DEBUG, "Sending AT command to modem: %s", at_cmd);
 	
-	rc = write(os->modem_ofd.fd, at_cmd, at_cmd_len);
-	if (rc < 0) {
-		LOGP(DMAIN, LOGL_ERROR, "Failed to write to modem: %s\n", strerror(errno));
-		return -errno;
+	/* Write with retry for partial writes */
+	size_t written = 0;
+	while (written < at_cmd_len) {
+		rc = write(os->modem_ofd.fd, at_cmd + written, at_cmd_len - written);
+		if (rc < 0) {
+			if (errno == EINTR || errno == EAGAIN) {
+				continue;  /* Retry on interrupt or would-block */
+			}
+			LOGP(DMAIN, LOGL_ERROR, "Failed to write to modem: %s\n", strerror(errno));
+			return -errno;
+		}
+		written += rc;
 	}
 	
-	if ((size_t)rc != at_cmd_len) {
-		LOGP(DMAIN, LOGL_ERROR, "Incomplete write to modem: %d/%zu\n", rc, at_cmd_len);
+	if (written != at_cmd_len) {
+		LOGP(DMAIN, LOGL_ERROR, "Incomplete write to modem: %zu/%zu\n", written, at_cmd_len);
 		return -EIO;
 	}
 	
@@ -702,6 +764,124 @@ static void apply_zbt_z8102ax_config(struct openwrt_state *os)
 }
 
 /***********************************************************************
+ * Signal Strength Monitoring
+ ***********************************************************************/
+
+/* Query modem signal strength using AT+CSQ command */
+static int openwrt_query_signal_strength(struct openwrt_state *os)
+{
+	char at_cmd[] = "AT+CSQ\r\n";
+	int rc;
+	
+	if (!os->modem_fd_registered) {
+		LOGP(DMAIN, LOGL_DEBUG, "Modem device not opened, skipping signal check\n");
+		return -ENOTCONN;
+	}
+	
+	LOGP(DMAIN, LOGL_DEBUG, "Querying modem signal strength\n");
+	
+	rc = write(os->modem_ofd.fd, at_cmd, strlen(at_cmd));
+	if (rc < 0) {
+		LOGP(DMAIN, LOGL_ERROR, "Failed to query signal strength: %s\n", strerror(errno));
+		return -errno;
+	}
+	
+	/* Response will be handled by modem_fd_cb */
+	return 0;
+}
+
+/* Timer callback for periodic signal strength checks */
+static void openwrt_signal_timer_cb(void *data)
+{
+	struct openwrt_state *os = data;
+	
+	if (!os->signal_monitoring_enabled)
+		return;
+	
+	/* Query signal strength */
+	openwrt_query_signal_strength(os);
+	
+	/* Reschedule timer */
+	if (os->signal_check_interval > 0) {
+		osmo_timer_schedule(&os->signal_timer, os->signal_check_interval, 0);
+	}
+}
+
+/* Parse AT+CSQ response: +CSQ: <rssi>,<ber> */
+static void openwrt_parse_csq_response(struct openwrt_state *os, const char *response)
+{
+	int rssi, ber;
+	
+	if (sscanf(response, "+CSQ: %d,%d", &rssi, &ber) == 2) {
+		/* Convert AT+CSQ rssi (0-31, 99=unknown) to dBm */
+		if (rssi >= 0 && rssi <= 31) {
+			os->stats.last_rssi = -113 + (rssi * 2);
+			LOGP(DMAIN, LOGL_INFO, "Signal strength: RSSI=%d dBm (CSQ=%d, BER=%d)\n",
+			     os->stats.last_rssi, rssi, ber);
+		} else if (rssi == 99) {
+			LOGP(DMAIN, LOGL_DEBUG, "Signal strength unknown\n");
+		}
+		os->stats.last_signal_check = time(NULL);
+	}
+}
+
+/***********************************************************************
+ * Statistics and Monitoring
+ ***********************************************************************/
+
+static void openwrt_print_statistics(struct openwrt_state *os)
+{
+	time_t uptime = time(NULL) - os->stats.start_time;
+	int hours = uptime / 3600;
+	int minutes = (uptime % 3600) / 60;
+	int seconds = uptime % 60;
+	
+	LOGP(DMAIN, LOGL_NOTICE, "=== OpenWRT Client Statistics ===\n");
+	LOGP(DMAIN, LOGL_NOTICE, "Uptime: %dh %dm %ds\n", hours, minutes, seconds);
+	LOGP(DMAIN, LOGL_NOTICE, "TPDUs sent: %lu\n", (unsigned long)os->stats.tpdus_sent);
+	LOGP(DMAIN, LOGL_NOTICE, "TPDUs received: %lu\n", (unsigned long)os->stats.tpdus_received);
+	LOGP(DMAIN, LOGL_NOTICE, "Errors: %lu\n", (unsigned long)os->stats.errors);
+	LOGP(DMAIN, LOGL_NOTICE, "Reconnections: %u\n", os->stats.reconnections);
+	LOGP(DMAIN, LOGL_NOTICE, "SIM switches: %u\n", os->stats.sim_switches);
+	
+	if (os->stats.last_signal_check > 0) {
+		LOGP(DMAIN, LOGL_NOTICE, "Last signal RSSI: %d dBm\n", os->stats.last_rssi);
+	}
+	
+	LOGP(DMAIN, LOGL_NOTICE, "=================================\n");
+}
+
+/* Signal handler for graceful shutdown */
+static struct openwrt_state *g_os_for_signal = NULL;
+
+static void openwrt_handle_shutdown(int sig)
+{
+	LOGP(DMAIN, LOGL_NOTICE, "Received signal %d, shutting down gracefully\n", sig);
+	
+	if (g_os_for_signal) {
+		openwrt_print_statistics(g_os_for_signal);
+		
+		/* Switch back to local SIM if in remote mode */
+		if (g_os_for_signal->bc) {
+			LOGP(DMAIN, LOGL_INFO, "Switching back to local SIM before exit\n");
+			frontend_request_sim_local(g_os_for_signal->bc);
+		}
+	}
+	
+	exit(0);
+}
+
+/* Signal handler for printing statistics on demand */
+static void openwrt_handle_print_stats(int sig)
+{
+	(void)sig;  /* Unused parameter */
+	
+	if (g_os_for_signal) {
+		openwrt_print_statistics(g_os_for_signal);
+	}
+}
+
+/***********************************************************************
  * Main entry point
  ***********************************************************************/
 
@@ -720,6 +900,43 @@ int client_user_main(struct bankd_client *g_client)
 	os->bc = g_client;
 	g_client->data = os;
 	g_openwrt_state = os;
+	g_os_for_signal = os;
+
+	/* Initialize statistics */
+	os->stats.start_time = time(NULL);
+	os->stats.tpdus_sent = 0;
+	os->stats.tpdus_received = 0;
+	os->stats.errors = 0;
+	os->stats.reconnections = 0;
+	os->stats.sim_switches = 0;
+	os->stats.last_signal_check = 0;
+	os->stats.last_rssi = 0;
+
+	/* Initialize signal monitoring (can be configured via environment) */
+	char *signal_interval = getenv("OPENWRT_SIGNAL_INTERVAL");
+	if (signal_interval) {
+		os->signal_check_interval = atoi(signal_interval);
+		os->signal_monitoring_enabled = (os->signal_check_interval > 0);
+	} else {
+		/* Default: check signal every 60 seconds */
+		os->signal_check_interval = 60;
+		os->signal_monitoring_enabled = true;
+	}
+	
+	if (os->signal_monitoring_enabled) {
+		LOGP(DMAIN, LOGL_INFO, "Signal monitoring enabled (interval: %d seconds)\n",
+		     os->signal_check_interval);
+		osmo_timer_setup(&os->signal_timer, openwrt_signal_timer_cb, os);
+	}
+
+	/* Set up signal handlers for graceful shutdown
+	 * NOTE: signal() is used here for simplicity. For production use,
+	 * sigaction() would be more portable and reliable. */
+	signal(SIGINT, openwrt_handle_shutdown);
+	signal(SIGTERM, openwrt_handle_shutdown);
+	
+	/* SIGUSR2 for printing statistics on demand */
+	signal(SIGUSR2, openwrt_handle_print_stats);
 
 	/* Check for dual-modem mode via environment variable */
 	char *dual_modem = getenv("OPENWRT_DUAL_MODEM");
@@ -876,6 +1093,15 @@ int client_user_main(struct bankd_client *g_client)
 
 	LOGP(DMAIN, LOGL_INFO, "OpenWRT client initialized (GPIO SIM: %d, GPIO Reset: %d)\n",
 	     os->sim_switch_gpio, os->modem_reset_gpio);
+
+	/* Start signal monitoring timer if enabled */
+	if (os->signal_monitoring_enabled && os->signal_check_interval > 0) {
+		osmo_timer_schedule(&os->signal_timer, os->signal_check_interval, 0);
+	}
+
+	/* Statistics are printed on-demand via SIGUSR2 signal.
+	 * Automatic periodic printing can be added if needed in the future. */
+	LOGP(DMAIN, LOGL_INFO, "Statistics available on demand via SIGUSR2 signal\n");
 
 	/* Run the main event loop */
 	while (1) {
