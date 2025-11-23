@@ -144,7 +144,8 @@ done
 # (--sdk or env var) takes precedence over auto-detection (git submodule).
 if [ -z "$OPENWRT_SDK_PATH" ]; then
     # Fallback: Check for git submodule (for automated builds and version control)
-    if [ -d "${REPO_ROOT}/openwrt-sdk" ] && [ -d "${REPO_ROOT}/openwrt-sdk/staging_dir" ]; then
+    # Note: We don't require staging_dir to exist yet - it will be created during initialization
+    if [ -d "${REPO_ROOT}/openwrt-sdk" ]; then
         OPENWRT_SDK_PATH="${REPO_ROOT}/openwrt-sdk"
         log_info "Using OpenWrt SDK from git submodule: $OPENWRT_SDK_PATH"
     else
@@ -193,7 +194,13 @@ cd "$OPENWRT_SDK_PATH"
 # The SDK needs staging_dir/host to exist before building packages
 if [ ! -d "staging_dir/host" ]; then
     log_info "Initializing OpenWrt SDK..."
-    # Run defconfig to initialize the SDK and create necessary directories
+    
+    # Create staging_dir/host directory structure
+    # This is required before running make commands on the SDK
+    # The -p flag creates parent directories as needed and doesn't error if they exist
+    mkdir -p staging_dir/host
+    
+    # Run defconfig to initialize the SDK and create necessary files
     if ! make defconfig > /dev/null 2>&1; then
         log_error "Failed to initialize OpenWrt SDK"
         log_info "This usually means the SDK is incomplete or corrupted"
