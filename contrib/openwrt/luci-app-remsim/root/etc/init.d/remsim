@@ -111,6 +111,18 @@ start_service() {
 		[ -n "$ionmesh_mcc_mnc" ] && procd_append_param env IONMESH_MCC_MNC="$ionmesh_mcc_mnc"
 	fi
 	
+	# Monitoring configuration
+	config_get signal_monitoring monitoring signal_monitoring "1"
+	config_get signal_interval monitoring signal_interval "60"
+	config_get stats_interval monitoring stats_interval "3600"
+	
+	if [ "$signal_monitoring" = "1" ]; then
+		procd_append_param env OPENWRT_SIGNAL_INTERVAL="$signal_interval"
+	else
+		procd_append_param env OPENWRT_SIGNAL_INTERVAL="0"
+	fi
+	procd_append_param env OPENWRT_STATS_INTERVAL="$stats_interval"
+	
 	procd_close_instance
 }
 

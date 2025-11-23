@@ -36,6 +36,12 @@ config ionmesh 'ionmesh'
 	option mapping_mode 'KI_PROXY_SWSIM'
 	option mcc_mnc ''
 
+config monitoring 'monitoring'
+	option signal_monitoring '1'
+	option signal_interval '60'
+	option stats_interval '3600'
+	option track_data_usage '0'
+
 config logging 'logging'
 	option debug '0'
 	option log_categories 'DMAIN:DPCU'
