@@ -189,6 +189,20 @@ log_info "Build jobs: $BUILD_JOBS"
 # Change to SDK directory
 cd "$OPENWRT_SDK_PATH"
 
+# Initialize SDK if not already initialized
+# The SDK needs staging_dir/host to exist before building packages
+if [ ! -d "staging_dir/host" ]; then
+    log_info "Initializing OpenWrt SDK..."
+    # Run defconfig to initialize the SDK and create necessary directories
+    if ! make defconfig > /dev/null 2>&1; then
+        log_error "Failed to initialize OpenWrt SDK"
+        log_info "This usually means the SDK is incomplete or corrupted"
+        log_info "Please verify the SDK was properly extracted and is compatible"
+        exit 1
+    fi
+    log_success "OpenWrt SDK initialized"
+fi
+
 # Copy package definitions to SDK
 log_info "Copying package definitions to SDK..."
 
