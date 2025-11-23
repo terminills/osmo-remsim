@@ -6,9 +6,61 @@ This document summarizes the OpenWrt package infrastructure created for osmo-rem
 
 ### 1. Package Definitions
 
-Two OpenWrt packages have been created to enable easy deployment of osmo-remsim on OpenWrt routers:
+Five OpenWrt packages have been created to enable easy deployment of osmo-remsim on OpenWrt routers:
 
-#### osmo-remsim-client (Binary Package)
+#### Dependency Packages
+
+##### libtalloc (Memory Allocator)
+**Location:** `contrib/openwrt/libtalloc/`
+
+**Version:** 2.4.2
+
+**What it provides:**
+- `/usr/lib/libtalloc.so*` - Hierarchical memory allocator library
+- Required by libosmocore
+
+##### libosmocore (Core Osmocom Library)
+**Location:** `contrib/openwrt/libosmocore/`
+
+**Version:** 1.11.0
+
+**What it provides:**
+- `/usr/lib/libosmocore.so*` - Core utilities library
+- `/usr/lib/libosmovty.so*` - VTY interface library
+- `/usr/lib/libosmoctrl.so*` - Control interface library
+- `/usr/lib/libosmocoding.so*` - Coding utilities
+- `/usr/lib/libosmosim.so*` - SIM utilities
+- Multiple other core libraries
+
+**Dependencies:**
+- libtalloc
+
+##### libosmo-gsm (GSM Library)
+**Location:** `contrib/openwrt/libosmocore/` (sub-package)
+
+**Version:** 1.11.0
+
+**What it provides:**
+- `/usr/lib/libosmogsm.so*` - GSM specific utilities
+
+**Dependencies:**
+- libosmocore
+
+##### libosmo-netif (Network Interface Library)
+**Location:** `contrib/openwrt/libosmo-netif/`
+
+**Version:** 1.6.0
+
+**What it provides:**
+- `/usr/lib/libosmonetif.so*` - Network interface utilities (IPA, LAPD, streams)
+
+**Dependencies:**
+- libosmocore
+- libosmo-gsm
+
+#### Main Packages
+
+##### osmo-remsim-client (Binary Package)
 **Location:** `contrib/openwrt/osmo-remsim-client/`
 
 **Contents:**
@@ -25,13 +77,14 @@ Two OpenWrt packages have been created to enable easy deployment of osmo-remsim 
 - `/usr/share/osmo-remsim/openwrt-event-script.sh` - Hardware event handler
 
 **Dependencies:**
+- libtalloc (>= 2.4.2)
 - libosmocore (>= 1.11.0)
 - libosmo-netif (>= 1.6.0)
 - libosmo-gsm (>= 1.11.0)
 - libpthread
 - librt
 
-#### luci-app-remsim (Web Interface Package)
+##### luci-app-remsim (Web Interface Package)
 **Location:** `contrib/openwrt/luci-app-remsim/`
 
 **Contents:**
@@ -90,18 +143,27 @@ Step-by-step installation guide including:
 
 Automated build script features:
 - Automatic SDK detection and setup
+- **Automatic dependency building** (libtalloc → libosmocore → libosmo-netif)
 - Package feed installation
 - Parallel compilation
 - Build both or individual packages
 - Clean build support
 - Verbose output option
-- Built package location reporting
+- Built package location reporting (including all dependency packages)
 
 **Usage:**
 ```bash
 export OPENWRT_SDK_PATH=/path/to/openwrt-sdk-23.05.6-mediatek-filogic
 ./contrib/openwrt/build-ipk.sh
 ```
+
+The script automatically:
+1. Copies all package definitions (dependencies + main packages) to SDK
+2. Builds libtalloc package
+3. Builds libosmocore and libosmo-gsm packages
+4. Builds libosmo-netif package
+5. Builds osmo-remsim-client and/or luci-app-remsim packages
+6. Reports all built IPK file locations
 
 ### 4. Configuration Changes
 
@@ -163,6 +225,10 @@ src/client/.libs/osmo-remsim-client-shell: ELF 64-bit LSB executable, ARM aarch6
 
    Expected output:
    ```
+   bin/packages/aarch64_cortex-a53/base/libtalloc_2.4.2-1_aarch64_cortex-a53.ipk
+   bin/packages/aarch64_cortex-a53/base/libosmocore_1.11.0-1_aarch64_cortex-a53.ipk
+   bin/packages/aarch64_cortex-a53/base/libosmo-gsm_1.11.0-1_aarch64_cortex-a53.ipk
+   bin/packages/aarch64_cortex-a53/base/libosmo-netif_1.6.0-1_aarch64_cortex-a53.ipk
    bin/packages/aarch64_cortex-a53/base/osmo-remsim-client_0.4.1-1_aarch64_cortex-a53.ipk
    bin/packages/aarch64_cortex-a53/luci/luci-app-remsim_0.4.1-1_all.ipk
    ```
@@ -174,7 +240,10 @@ If you prefer manual control:
 ```bash
 cd $OPENWRT_SDK_PATH
 
-# Copy package definitions
+# Copy all package definitions (dependencies + main packages)
+cp -r /path/to/osmo-remsim/contrib/openwrt/libtalloc package/
+cp -r /path/to/osmo-remsim/contrib/openwrt/libosmocore package/
+cp -r /path/to/osmo-remsim/contrib/openwrt/libosmo-netif package/
 cp -r /path/to/osmo-remsim/contrib/openwrt/osmo-remsim-client package/
 cp -r /path/to/osmo-remsim/contrib/openwrt/luci-app-remsim package/
 
@@ -182,7 +251,10 @@ cp -r /path/to/osmo-remsim/contrib/openwrt/luci-app-remsim package/
 ./scripts/feeds update -a
 ./scripts/feeds install -a
 
-# Build packages
+# Build packages in dependency order
+make package/libtalloc/compile V=s
+make package/libosmocore/compile V=s
+make package/libosmo-netif/compile V=s
 make package/osmo-remsim-client/compile V=s
 make package/luci-app-remsim/compile V=s
 ```
@@ -192,14 +264,22 @@ make package/luci-app-remsim/compile V=s
 ### Basic Installation
 
 ```bash
-# Transfer IPK files
-scp osmo-remsim-client_*.ipk luci-app-remsim_*.ipk root@router:/tmp/
+# Transfer all IPK files (dependencies + main packages)
+scp libtalloc_*.ipk libosmocore_*.ipk libosmo-gsm_*.ipk libosmo-netif_*.ipk \
+    osmo-remsim-client_*.ipk luci-app-remsim_*.ipk root@router:/tmp/
 
 # SSH to router
 ssh root@router
 
-# Install packages
+# Install packages in dependency order
 opkg update
+
+# Install dependencies first
+opkg install /tmp/libtalloc_*.ipk
+opkg install /tmp/libosmocore_*.ipk /tmp/libosmo-gsm_*.ipk
+opkg install /tmp/libosmo-netif_*.ipk
+
+# Then install main packages
 opkg install /tmp/osmo-remsim-client_*.ipk
 opkg install /tmp/luci-app-remsim_*.ipk
 
@@ -282,6 +362,12 @@ contrib/openwrt/
 ├── INSTALL.md                         # Installation guide
 ├── PACKAGE_SUMMARY.md                 # This file
 ├── build-ipk.sh                       # Automated build script
+├── libtalloc/                         # Dependency package
+│   └── Makefile                       # libtalloc package definition
+├── libosmocore/                       # Dependency package
+│   └── Makefile                       # libosmocore package definition (includes libosmo-gsm)
+├── libosmo-netif/                     # Dependency package
+│   └── Makefile                       # libosmo-netif package definition
 ├── osmo-remsim-client/               # Binary package
 │   ├── Makefile                       # OpenWrt package definition
 │   └── files/
