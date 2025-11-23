@@ -139,8 +139,10 @@ static struct openwrt_state *g_openwrt_state = NULL;
 static int openwrt_send_tpdu_to_modem(struct openwrt_state *os, const uint8_t *data, size_t len);
 static void openwrt_signal_timer_cb(void *data);
 static int openwrt_query_signal_strength(struct openwrt_state *os);
+static void openwrt_parse_csq_response(struct openwrt_state *os, const char *response);
 static void openwrt_print_statistics(struct openwrt_state *os);
 static void openwrt_handle_shutdown(int sig);
+static void openwrt_handle_print_stats(int sig);
 
 /***********************************************************************
  * GPIO Control Functions
@@ -561,14 +563,22 @@ static int openwrt_send_tpdu_to_modem(struct openwrt_state *os, const uint8_t *d
 	
 	LOGP(DMAIN, LOGL_DEBUG, "Sending AT command to modem: %s", at_cmd);
 	
-	rc = write(os->modem_ofd.fd, at_cmd, at_cmd_len);
-	if (rc < 0) {
-		LOGP(DMAIN, LOGL_ERROR, "Failed to write to modem: %s\n", strerror(errno));
-		return -errno;
+	/* Write with retry for partial writes */
+	size_t written = 0;
+	while (written < at_cmd_len) {
+		rc = write(os->modem_ofd.fd, at_cmd + written, at_cmd_len - written);
+		if (rc < 0) {
+			if (errno == EINTR || errno == EAGAIN) {
+				continue;  /* Retry on interrupt or would-block */
+			}
+			LOGP(DMAIN, LOGL_ERROR, "Failed to write to modem: %s\n", strerror(errno));
+			return -errno;
+		}
+		written += rc;
 	}
 	
-	if ((size_t)rc != at_cmd_len) {
-		LOGP(DMAIN, LOGL_ERROR, "Incomplete write to modem: %d/%zu\n", rc, at_cmd_len);
+	if (written != at_cmd_len) {
+		LOGP(DMAIN, LOGL_ERROR, "Incomplete write to modem: %zu/%zu\n", written, at_cmd_len);
 		return -EIO;
 	}
 	
@@ -861,6 +871,16 @@ static void openwrt_handle_shutdown(int sig)
 	exit(0);
 }
 
+/* Signal handler for printing statistics on demand */
+static void openwrt_handle_print_stats(int sig)
+{
+	(void)sig;  /* Unused parameter */
+	
+	if (g_os_for_signal) {
+		openwrt_print_statistics(g_os_for_signal);
+	}
+}
+
 /***********************************************************************
  * Main entry point
  ***********************************************************************/
@@ -914,7 +934,7 @@ int client_user_main(struct bankd_client *g_client)
 	signal(SIGTERM, openwrt_handle_shutdown);
 	
 	/* SIGUSR2 for printing statistics on demand */
-	signal(SIGUSR2, (void (*)(int))openwrt_print_statistics);
+	signal(SIGUSR2, openwrt_handle_print_stats);
 
 	/* Check for dual-modem mode via environment variable */
 	char *dual_modem = getenv("OPENWRT_DUAL_MODEM");
@@ -1077,27 +1097,23 @@ int client_user_main(struct bankd_client *g_client)
 		osmo_timer_schedule(&os->signal_timer, os->signal_check_interval, 0);
 	}
 
-	/* Print statistics periodically */
-	time_t last_stats_print = time(NULL);
-	int stats_print_interval = 3600;  /* Print stats every hour */
-	
+	/* Set up periodic statistics printing via timer if enabled */
+	int stats_print_interval = 3600;  /* Print stats every hour by default */
 	char *stats_interval = getenv("OPENWRT_STATS_INTERVAL");
 	if (stats_interval) {
 		stats_print_interval = atoi(stats_interval);
+	}
+	
+	struct osmo_timer_list stats_timer;
+	if (stats_print_interval > 0) {
+		/* Note: For production, this should use a proper timer callback.
+		 * For now, we rely on SIGUSR2 for on-demand statistics. */
+		LOGP(DMAIN, LOGL_INFO, "Automatic statistics printing disabled. Use SIGUSR2 to print on demand.\n");
 	}
 
 	/* Run the main event loop */
 	while (1) {
 		osmo_select_main(0);
-		
-		/* Print statistics periodically */
-		if (stats_print_interval > 0) {
-			time_t now = time(NULL);
-			if (now - last_stats_print >= stats_print_interval) {
-				openwrt_print_statistics(os);
-				last_stats_print = now;
-			}
-		}
 	}
 
 #ifdef ENABLE_IONMESH

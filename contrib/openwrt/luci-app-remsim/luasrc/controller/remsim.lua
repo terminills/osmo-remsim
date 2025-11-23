@@ -181,9 +181,11 @@ function get_statistics()
 	end
 	
 	-- Try to get process uptime from /proc if PID is available
-	local pid = luci.sys.exec("pidof osmo-remsim-client-openwrt"):match("%d+")
-	if pid then
-		local proc_stat = luci.sys.exec("cat /proc/" .. pid .. "/stat 2>/dev/null")
+	local pid_str = luci.sys.exec("pidof osmo-remsim-client-openwrt"):match("%d+")
+	local pid = tonumber(pid_str)
+	-- Validate PID is numeric and reasonable (1-65535)
+	if pid and pid > 0 and pid < 65536 then
+		local proc_stat = luci.sys.exec("cat /proc/" .. tostring(pid) .. "/stat 2>/dev/null")
 		if proc_stat and proc_stat ~= "" then
 			local starttime = proc_stat:match("%d+%s+%S+%s+%S+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+(%d+)")
 			if starttime then
@@ -248,9 +250,11 @@ end
 
 function action_print_stats()
 	-- Send SIGUSR2 signal to print statistics
-	local pid = luci.sys.exec("pidof osmo-remsim-client-openwrt"):match("%d+")
-	if pid then
-		luci.sys.call("kill -USR2 " .. pid)
+	local pid_str = luci.sys.exec("pidof osmo-remsim-client-openwrt"):match("%d+")
+	local pid = tonumber(pid_str)
+	-- Validate PID is numeric and reasonable (1-65535)
+	if pid and pid > 0 and pid < 65536 then
+		luci.sys.call("kill -USR2 " .. tostring(pid))
 		luci.http.prepare_content("text/plain")
 		luci.http.write("Statistics print signal sent. Check logs with: logread | tail -20")
 	else
