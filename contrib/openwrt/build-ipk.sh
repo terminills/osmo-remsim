@@ -225,6 +225,14 @@ fi
 # Copy package definitions to SDK
 log_info "Copying package definitions to SDK..."
 
+# Always copy dependency packages (required for osmo-remsim-client)
+log_info "Setting up dependency packages..."
+rm -rf package/libtalloc package/libosmocore package/libosmo-netif
+cp -r "$SCRIPT_DIR/libtalloc" package/
+cp -r "$SCRIPT_DIR/libosmocore" package/
+cp -r "$SCRIPT_DIR/libosmo-netif" package/
+log_success "Dependency packages copied"
+
 if [ $BUILD_CLIENT -eq 1 ]; then
     log_info "Setting up osmo-remsim-client package..."
     rm -rf package/osmo-remsim-client
@@ -250,6 +258,9 @@ log_info "Installing required feeds..."
 # Clean if requested
 if [ $CLEAN_BUILD -eq 1 ]; then
     log_info "Cleaning previous builds..."
+    make package/libtalloc/clean > /dev/null 2>&1 || true
+    make package/libosmocore/clean > /dev/null 2>&1 || true
+    make package/libosmo-netif/clean > /dev/null 2>&1 || true
     if [ $BUILD_CLIENT -eq 1 ]; then
         make package/osmo-remsim-client/clean > /dev/null 2>&1 || true
     fi
@@ -265,6 +276,36 @@ if [ $VERBOSE -eq 1 ]; then
     MAKE_OPTS="$MAKE_OPTS V=s"
 fi
 
+# Build dependencies first
+log_info "Building dependency packages..."
+
+log_info "Building libtalloc..."
+if make package/libtalloc/compile $MAKE_OPTS; then
+    log_success "libtalloc package built successfully"
+else
+    log_error "Failed to build libtalloc package"
+    exit 1
+fi
+
+log_info "Building libosmocore..."
+if make package/libosmocore/compile $MAKE_OPTS; then
+    log_success "libosmocore package built successfully"
+else
+    log_error "Failed to build libosmocore package"
+    exit 1
+fi
+
+log_info "Building libosmo-netif..."
+if make package/libosmo-netif/compile $MAKE_OPTS; then
+    log_success "libosmo-netif package built successfully"
+else
+    log_error "Failed to build libosmo-netif package"
+    exit 1
+fi
+
+log_success "All dependency packages built successfully"
+
+# Build main packages
 if [ $BUILD_CLIENT -eq 1 ]; then
     log_info "Building osmo-remsim-client package..."
     if make package/osmo-remsim-client/compile $MAKE_OPTS; then
@@ -289,9 +330,18 @@ fi
 log_info "Locating built IPK packages..."
 echo ""
 
+TALLOC_IPKS=$(find bin/ -name "libtalloc*.ipk" 2>/dev/null || true)
+OSMOCORE_IPKS=$(find bin/ -name "libosmocore*.ipk" -o -name "libosmo-gsm*.ipk" 2>/dev/null || true)
+OSMONETIF_IPKS=$(find bin/ -name "libosmo-netif*.ipk" 2>/dev/null || true)
 CLIENT_IPKS=$(find bin/ -name "osmo-remsim-client*.ipk" 2>/dev/null || true)
 LUCI_IPKS=$(find bin/ -name "luci-app-remsim*.ipk" 2>/dev/null || true)
-ALL_IPKS=$(find bin/ \( -name "osmo-remsim-client*.ipk" -o -name "luci-app-remsim*.ipk" \) 2>/dev/null || true)
+
+if [ -n "$TALLOC_IPKS" ] || [ -n "$OSMOCORE_IPKS" ] || [ -n "$OSMONETIF_IPKS" ]; then
+    log_success "Dependency package(s) built:"
+    for ipk in $TALLOC_IPKS $OSMOCORE_IPKS $OSMONETIF_IPKS; do
+        echo "  - $ipk ($(du -h "$ipk" | cut -f1))"
+    done
+fi
 
 if [ -n "$CLIENT_IPKS" ]; then
     log_success "Client package(s) built:"
@@ -310,12 +360,21 @@ fi
 echo ""
 log_success "Build complete!"
 log_info "To install on your router:"
-if [ -n "$CLIENT_IPKS" ] && [ -n "$LUCI_IPKS" ]; then
-    log_info "  1. Transfer IPK files: scp $CLIENT_IPKS $LUCI_IPKS root@router:/tmp/"
-elif [ -n "$CLIENT_IPKS" ]; then
-    log_info "  1. Transfer IPK files: scp $CLIENT_IPKS root@router:/tmp/"
-elif [ -n "$LUCI_IPKS" ]; then
-    log_info "  1. Transfer IPK files: scp $LUCI_IPKS root@router:/tmp/"
+log_info "  1. Transfer IPK files to router:"
+if [ -n "$TALLOC_IPKS" ]; then
+    log_info "     scp $TALLOC_IPKS root@router:/tmp/"
+fi
+if [ -n "$OSMOCORE_IPKS" ]; then
+    log_info "     scp $OSMOCORE_IPKS root@router:/tmp/"
+fi
+if [ -n "$OSMONETIF_IPKS" ]; then
+    log_info "     scp $OSMONETIF_IPKS root@router:/tmp/"
+fi
+if [ -n "$CLIENT_IPKS" ]; then
+    log_info "     scp $CLIENT_IPKS root@router:/tmp/"
+fi
+if [ -n "$LUCI_IPKS" ]; then
+    log_info "     scp $LUCI_IPKS root@router:/tmp/"
 fi
 log_info "  2. SSH to router: ssh root@router"
 log_info "  3. Install: opkg install /tmp/*.ipk"
