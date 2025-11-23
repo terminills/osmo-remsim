@@ -1097,19 +1097,9 @@ int client_user_main(struct bankd_client *g_client)
 		osmo_timer_schedule(&os->signal_timer, os->signal_check_interval, 0);
 	}
 
-	/* Set up periodic statistics printing via timer if enabled */
-	int stats_print_interval = 3600;  /* Print stats every hour by default */
-	char *stats_interval = getenv("OPENWRT_STATS_INTERVAL");
-	if (stats_interval) {
-		stats_print_interval = atoi(stats_interval);
-	}
-	
-	struct osmo_timer_list stats_timer;
-	if (stats_print_interval > 0) {
-		/* Note: For production, this should use a proper timer callback.
-		 * For now, we rely on SIGUSR2 for on-demand statistics. */
-		LOGP(DMAIN, LOGL_INFO, "Automatic statistics printing disabled. Use SIGUSR2 to print on demand.\n");
-	}
+	/* Statistics are printed on-demand via SIGUSR2 signal.
+	 * Automatic periodic printing can be added if needed in the future. */
+	LOGP(DMAIN, LOGL_INFO, "Statistics available on demand via SIGUSR2 signal\n");
 
 	/* Run the main event loop */
 	while (1) {

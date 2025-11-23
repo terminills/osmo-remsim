@@ -185,7 +185,15 @@ function get_statistics()
 	local pid = tonumber(pid_str)
 	-- Validate PID is numeric and reasonable (1-65535)
 	if pid and pid > 0 and pid < 65536 then
-		local proc_stat = luci.sys.exec("cat /proc/" .. tostring(pid) .. "/stat 2>/dev/null")
+		-- Use nixio for safe file reading to avoid command injection
+		local nixio = require "nixio"
+		local proc_stat_path = "/proc/" .. tostring(pid) .. "/stat"
+		local proc_stat_file = nixio.open(proc_stat_path, "r")
+		local proc_stat = nil
+		if proc_stat_file then
+			proc_stat = proc_stat_file:read(2048)
+			proc_stat_file:close()
+		end
 		if proc_stat and proc_stat ~= "" then
 			local starttime = proc_stat:match("%d+%s+%S+%s+%S+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+(%d+)")
 			if starttime then
@@ -254,7 +262,18 @@ function action_print_stats()
 	local pid = tonumber(pid_str)
 	-- Validate PID is numeric and reasonable (1-65535)
 	if pid and pid > 0 and pid < 65536 then
-		luci.sys.call("kill -USR2 " .. tostring(pid))
+		-- Use posix.signal if available, fallback to kill command with validated PID
+		local has_posix, posix = pcall(require, "posix.signal")
+		if has_posix and posix.kill then
+			-- Use posix.kill for safer signal sending
+			local ok, err = pcall(posix.kill, pid, posix.SIGUSR2)
+			if not ok then
+				LOGP(DMAIN, LOGL_ERROR, "Failed to send signal via posix: %s\n", err)
+			end
+		else
+			-- Fallback to shell command with validated numeric PID only
+			luci.sys.call("kill -USR2 " .. tostring(pid))
+		end
 		luci.http.prepare_content("text/plain")
 		luci.http.write("Statistics print signal sent. Check logs with: logread | tail -20")
 	else
