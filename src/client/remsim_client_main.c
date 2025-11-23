@@ -171,12 +171,16 @@ static void handle_options(struct client_config *cfg, int argc, char **argv)
 
 
 /* Parse OpenWRT UCI config file /etc/config/remsim
- * This is a simple parser for UCI format without using libuci */
+ * This is a simple parser for UCI format without using libuci
+ * 
+ * The parser reads configuration values from the UCI file and applies them
+ * to the client config. Command-line arguments will override these settings.
+ */
 static void parse_openwrt_config(struct client_config *cfg, const char *config_file)
 {
 	FILE *f;
 	char line[1024];
-	char *section = NULL;
+	char *section = NULL;  /* Current config section, talloc-allocated */
 	
 	f = fopen(config_file, "r");
 	if (!f) {
