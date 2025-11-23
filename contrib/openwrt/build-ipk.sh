@@ -143,7 +143,7 @@ done
 # git submodule first, then environment variable. Here, explicit user input
 # (--sdk or env var) takes precedence over auto-detection (git submodule).
 if [ -z "$OPENWRT_SDK_PATH" ]; then
-    # Option 1: Check for git submodule (for nightly builds and version control)
+    # Fallback: Check for git submodule (for automated builds and version control)
     if [ -d "${REPO_ROOT}/openwrt-sdk" ] && [ -d "${REPO_ROOT}/openwrt-sdk/staging_dir" ]; then
         OPENWRT_SDK_PATH="${REPO_ROOT}/openwrt-sdk"
         log_info "Using OpenWrt SDK from git submodule: $OPENWRT_SDK_PATH"
