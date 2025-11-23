@@ -878,7 +878,7 @@ show_summary() {
     else
         log_info "Built OpenWRT components installed to: ${INST_DIR}"
         log_info "  - Binary: bin/osmo-remsim-client-openwrt"
-        log_info "  - Library: lib/libosmo-rspro.so*"
+        log_info "  - Library: lib/libosmo-rspro.so (and version symlinks)"
     fi
     
     if [ "$DO_INSTALL" -eq 0 ]; then
