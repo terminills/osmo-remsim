@@ -144,7 +144,8 @@ done
 # (--sdk or env var) takes precedence over auto-detection (git submodule).
 if [ -z "$OPENWRT_SDK_PATH" ]; then
     # Fallback: Check for git submodule (for automated builds and version control)
-    if [ -d "${REPO_ROOT}/openwrt-sdk" ] && [ -d "${REPO_ROOT}/openwrt-sdk/staging_dir" ]; then
+    # Note: We don't require staging_dir to exist yet - it will be created during initialization
+    if [ -d "${REPO_ROOT}/openwrt-sdk" ]; then
         OPENWRT_SDK_PATH="${REPO_ROOT}/openwrt-sdk"
         log_info "Using OpenWrt SDK from git submodule: $OPENWRT_SDK_PATH"
     else
