@@ -197,7 +197,16 @@ function get_statistics()
 		if proc_stat and proc_stat ~= "" then
 			local starttime = proc_stat:match("%d+%s+%S+%s+%S+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+%d+%s+(%d+)")
 			if starttime then
-				local system_uptime = luci.sys.exec("cat /proc/uptime"):match("^(%S+)")
+				-- Read /proc/uptime safely using nixio
+				local uptime_file = nixio.open("/proc/uptime", "r")
+				local system_uptime = nil
+				if uptime_file then
+					local uptime_content = uptime_file:read(128)
+					uptime_file:close()
+					if uptime_content then
+						system_uptime = uptime_content:match("^(%S+)")
+					end
+				end
 				if system_uptime then
 					local hz = 100  -- Typical HZ value
 					local uptime_sec = tonumber(system_uptime) - (tonumber(starttime) / hz)
@@ -266,12 +275,11 @@ function action_print_stats()
 		local has_posix, posix = pcall(require, "posix.signal")
 		if has_posix and posix.kill then
 			-- Use posix.kill for safer signal sending
-			local ok, err = pcall(posix.kill, pid, posix.SIGUSR2)
-			if not ok then
-				LOGP(DMAIN, LOGL_ERROR, "Failed to send signal via posix: %s\n", err)
-			end
+			-- Silently ignore errors in signal sending
+			pcall(posix.kill, pid, posix.SIGUSR2)
 		else
 			-- Fallback to shell command with validated numeric PID only
+			-- PID is validated to be numeric and in valid range, safe to use
 			luci.sys.call("kill -USR2 " .. tostring(pid))
 		end
 		luci.http.prepare_content("text/plain")

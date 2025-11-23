@@ -929,7 +929,9 @@ int client_user_main(struct bankd_client *g_client)
 		osmo_timer_setup(&os->signal_timer, openwrt_signal_timer_cb, os);
 	}
 
-	/* Set up signal handlers for graceful shutdown */
+	/* Set up signal handlers for graceful shutdown
+	 * NOTE: signal() is used here for simplicity. For production use,
+	 * sigaction() would be more portable and reliable. */
 	signal(SIGINT, openwrt_handle_shutdown);
 	signal(SIGTERM, openwrt_handle_shutdown);
 	
