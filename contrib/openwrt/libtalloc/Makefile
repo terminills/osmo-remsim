@@ -52,6 +52,9 @@ CROSS = " \
 	\nChecking for HAVE_MREMAP: NO \
 	\nChecking for HAVE_INCOHERENT_MMAP: (2, \"\") \
 	\nChecking for HAVE_SECURE_MKSTEMP: OK \
+	\nChecking if compiler accepts -fstack-protector-strong: NO \
+	\nChecking if compiler accepts -fstack-protector: NO \
+	\nChecking if compiler accepts -fstack-clash-protection: OK \
 	\n"
 
 define Build/Configure
