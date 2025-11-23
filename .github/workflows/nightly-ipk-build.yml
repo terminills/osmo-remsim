@@ -16,6 +16,9 @@ on:
 jobs:
   build-ipk-packages:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
     
     strategy:
       matrix:
