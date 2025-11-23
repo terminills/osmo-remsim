@@ -197,6 +197,7 @@ if [ ! -d "staging_dir/host" ]; then
     
     # Create staging_dir/host directory structure
     # This is required before running make commands on the SDK
+    # The -p flag creates parent directories as needed and doesn't error if they exist
     mkdir -p staging_dir/host
     
     # Run defconfig to initialize the SDK and create necessary files
