@@ -6,12 +6,6 @@ on:
     - cron: '0 2 * * *'
   workflow_dispatch:
     # Allow manual triggering
-  push:
-    branches:
-      - 'copilot/**'
-    paths:
-      - '.github/workflows/nightly-ipk-build.yml'
-      - 'contrib/openwrt/**'
 
 jobs:
   build-ipk-packages:
@@ -118,8 +112,8 @@ jobs:
         
         # List all packages with sizes (only if IPK files exist)
         if ls *.ipk 1> /dev/null 2>&1; then
-          for ipk in *.ipk; do
-            echo "  - $ipk ($(du -h "$ipk" | cut -f1))" >> BUILD_INFO.txt
+          find . -maxdepth 1 -name "*.ipk" -type f | while IFS= read -r ipk; do
+            echo "  - $(basename "$ipk") ($(du -h "$ipk" | cut -f1))" >> BUILD_INFO.txt
           done
         else
           echo "  (No IPK files found)" >> BUILD_INFO.txt

@@ -8,7 +8,7 @@ Nightly builds are automatically generated every day at 2 AM UTC and are availab
 
 ### Download from GitHub Actions
 
-1. Go to the [Actions tab](https://github.com/terminills/osmo-remsim/actions/workflows/nightly-ipk-build.yml) in the repository
+1. Go to the Actions tab (`https://github.com/<owner>/<repo>/actions/workflows/nightly-ipk-build.yml`) in the repository
 2. Click on the latest successful workflow run
 3. Scroll down to the "Artifacts" section
 4. Download the IPK package archive for your architecture:
@@ -27,7 +27,7 @@ Nightly build artifacts are retained for **90 days** from the build date.
 
 You can manually trigger a build at any time:
 
-1. Go to the [Nightly IPK Build workflow](https://github.com/terminills/osmo-remsim/actions/workflows/nightly-ipk-build.yml)
+1. Go to the Nightly IPK Build workflow (Actions tab → Nightly IPK Build)
 2. Click on "Run workflow"
 3. Select the branch (usually `main` or `master`)
 4. Click "Run workflow"
@@ -99,6 +99,6 @@ Workflow file: `.github/workflows/nightly-ipk-build.yml`
 ## Support
 
 For issues with nightly builds:
-- Check the [workflow runs](https://github.com/terminills/osmo-remsim/actions/workflows/nightly-ipk-build.yml) for build logs
-- Report issues on [GitHub Issues](https://github.com/terminills/osmo-remsim/issues)
+- Check the workflow runs (Actions tab → Nightly IPK Build) for build logs
+- Report issues on GitHub Issues
 - For general support, see the main [README](../../README.md)
