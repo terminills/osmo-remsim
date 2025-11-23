@@ -43,8 +43,7 @@ jobs:
           python3-pip \
           wget \
           curl \
-          xz-utils \
-          rsync
+          xz-utils
     
     - name: Cache OpenWRT SDK
       id: cache-sdk
@@ -114,10 +113,14 @@ jobs:
         Packages Built:
         EOF
         
-        # List all packages with sizes
-        for ipk in *.ipk; do
-          echo "  - $ipk ($(du -h "$ipk" | cut -f1))" >> BUILD_INFO.txt
-        done
+        # List all packages with sizes (only if IPK files exist)
+        if ls *.ipk 1> /dev/null 2>&1; then
+          for ipk in *.ipk; do
+            echo "  - $ipk ($(du -h "$ipk" | cut -f1))" >> BUILD_INFO.txt
+          done
+        else
+          echo "  (No IPK files found)" >> BUILD_INFO.txt
+        fi
         
         echo ""
         echo "Build info generated:"
