@@ -11,6 +11,12 @@
 #   OPENWRT_SDK_PATH    Path to OpenWrt SDK (required)
 #   BUILD_JOBS          Number of parallel jobs (default: auto-detect)
 
+# Unset PROMPT_DIRTRIM immediately to prevent bash from abbreviating paths with "..."
+# This MUST be done before any path operations (pwd, cd, etc.) to ensure paths
+# are captured correctly. OpenWrt's Makefile system fails when paths contain "..."
+# as it tries to use them literally, causing "No such file or directory" errors.
+unset PROMPT_DIRTRIM
+
 set -e
 
 # Colors for output
@@ -186,13 +192,6 @@ fi
 log_info "OpenWrt SDK: $OPENWRT_SDK_PATH"
 log_info "Repository: $REPO_ROOT"
 log_info "Build jobs: $BUILD_JOBS"
-
-# Unset PROMPT_DIRTRIM to prevent bash from abbreviating paths with "..."
-# This is critical because OpenWrt's Makefile system uses shell commands
-# that can be affected by this environment variable, causing paths like
-# /home/user/.../openwrt-sdk/staging_dir which fail when used literally
-# MUST be done BEFORE cd to prevent any path abbreviation in subsequent commands
-unset PROMPT_DIRTRIM
 
 # Change to SDK directory and set TOPDIR for OpenWrt build system
 cd "$OPENWRT_SDK_PATH"
