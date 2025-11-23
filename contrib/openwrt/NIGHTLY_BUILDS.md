@@ -14,7 +14,7 @@ Nightly builds are automatically generated every day at 2 AM UTC and are availab
 4. Click on the latest successful workflow run
 5. Scroll down to the "Artifacts" section
 6. Download the IPK package archive for your architecture:
-   - `ipk-packages-23.05.6-mediatek-filogic-<run-number>` - For MediaTek MT7986 (aarch64)
+   - `ipk-packages-23.05.6-mediatek-filogic-<run-number>` - For MediaTek MT7986 (aarch64, current default)
 
 The archive contains:
 - Dependency packages: `libtalloc`, `libosmocore`, `libosmo-gsm`, `libosmo-netif`
@@ -31,7 +31,7 @@ You can manually trigger a build at any time:
 
 1. Go to the Nightly IPK Build workflow (Actions tab → Nightly IPK Build)
 2. Click on "Run workflow"
-3. Select the branch (usually `main` or `master`)
+3. Select the default branch (check repository settings if unsure)
 4. Click "Run workflow"
 
 The build typically takes 10-15 minutes to complete.

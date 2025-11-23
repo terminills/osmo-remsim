@@ -2,7 +2,8 @@ name: Nightly IPK Build
 
 on:
   schedule:
-    # Run nightly at 2 AM UTC
+    # Run nightly at 2 AM UTC (coordinated universal time)
+    # Cron format: minute hour day-of-month month day-of-week
     - cron: '0 2 * * *'
   workflow_dispatch:
     # Allow manual triggering
