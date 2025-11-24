@@ -170,6 +170,108 @@ static void handle_options(struct client_config *cfg, int argc, char **argv)
 }
 
 
+/* Parse OpenWRT UCI config file /etc/config/remsim
+ * This is a simple parser for UCI format without using libuci
+ * 
+ * The parser reads configuration values from the UCI file and applies them
+ * to the client config. Command-line arguments will override these settings.
+ */
+static void parse_openwrt_config(struct client_config *cfg, const char *config_file)
+{
+	FILE *f;
+	char line[1024];
+	char *section = NULL;  /* Current config section, talloc-allocated */
+	
+	f = fopen(config_file, "r");
+	if (!f) {
+		/* Config file doesn't exist or can't be opened - not an error */
+		return;
+	}
+	
+	while (fgets(line, sizeof(line), f)) {
+		char *p = line;
+		
+		/* Skip leading whitespace */
+		while (*p == ' ' || *p == '\t')
+			p++;
+		
+		/* Skip empty lines and comments */
+		if (*p == '\0' || *p == '\n' || *p == '#')
+			continue;
+		
+		/* Parse config section: config <type> '<name>' */
+		if (strncmp(p, "config ", 7) == 0) {
+			char type[64], name[64];
+			if (sscanf(p, "config %63s '%63[^']'", type, name) == 2) {
+				if (section)
+					talloc_free(section);
+				section = talloc_strdup(cfg, name);
+			}
+			continue;
+		}
+		
+		/* Parse option: option <key> '<value>' or option <key> <value> */
+		if (strncmp(p, "option ", 7) == 0) {
+			char key[64], value[512];
+			int n;
+			
+			/* Try quoted value first */
+			n = sscanf(p, "option %63s '%511[^']'", key, value);
+			if (n != 2) {
+				/* Try unquoted value */
+				n = sscanf(p, "option %63s %511s", key, value);
+			}
+			
+			if (n == 2 && section) {
+				/* Remove trailing newline from value */
+				char *nl = strchr(value, '\n');
+				if (nl)
+					*nl = '\0';
+				
+				/* Apply configuration based on section */
+				if (strcmp(section, "server") == 0) {
+					if (strcmp(key, "host") == 0) {
+						/* Trim leading and trailing spaces from host */
+						char *start = value;
+						char *end;
+						
+						while (*start == ' ' || *start == '\t')
+							start++;
+						
+						end = start + strlen(start) - 1;
+						while (end > start && (*end == ' ' || *end == '\t' || *end == '\n'))
+							*end-- = '\0';
+						
+						osmo_talloc_replace_string(cfg, &cfg->server_host, start);
+					} else if (strcmp(key, "port") == 0) {
+						char *endptr;
+						long port = strtol(value, &endptr, 10);
+						if (*endptr == '\0' && port > 0 && port <= 65535)
+							cfg->server_port = (int)port;
+					}
+				} else if (strcmp(section, "client") == 0) {
+					if (strcmp(key, "client_id") == 0) {
+						char *endptr;
+						long id = strtol(value, &endptr, 10);
+						if (*endptr == '\0' && id >= 0 && id <= 1023)
+							cfg->client_id = (int)id;
+					} else if (strcmp(key, "client_slot") == 0) {
+						char *endptr;
+						long slot = strtol(value, &endptr, 10);
+						if (*endptr == '\0' && slot >= 0 && slot <= 1023)
+							cfg->client_slot = (int)slot;
+					}
+				}
+			}
+			continue;
+		}
+	}
+	
+	if (section)
+		talloc_free(section);
+	fclose(f);
+}
+
 static int avoid_zombies(void)
 {
 	static struct sigaction sa_chld;
@@ -202,6 +304,13 @@ int main(int argc, char **argv)
 
 	cfg = client_config_init(g_tall_ctx);
 	OSMO_ASSERT(cfg);
+	
+	/* For OpenWRT client, try to read config from /etc/config/remsim first.
+	 * Command-line arguments will override config file settings. */
+	if (strstr(argv[0], "openwrt")) {
+		parse_openwrt_config(cfg, "/etc/config/remsim");
+	}
+	
 	handle_options(cfg, argc, argv);
 
 	g_client = remsim_client_create(g_tall_ctx, hostname, "remsim-client",cfg);
