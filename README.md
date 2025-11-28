@@ -40,6 +40,28 @@ Key features:
 - [LuCI Web Interface](doc/LUCI-WEB-INTERFACE.md) - Web-based configuration
 - [IonMesh Integration](doc/IONMESH-INTEGRATION.md) - Orchestrator setup
 
+Docker Support
+--------------
+
+osmo-remsim can be easily deployed using Docker, with support for USB smart card readers (like Octosim):
+
+```bash
+# Build Docker image
+docker build -t osmo-remsim .
+
+# Run the server
+docker run -d --name remsim-server -p 9997:9997 -p 9998:9998 osmo-remsim server
+
+# Run the bankd with USB access (for octosim reader)
+docker run -d --name remsim-bankd \
+  --privileged \
+  -v /dev/bus/usb:/dev/bus/usb \
+  -e REMSIM_SERVER_HOST=<server-ip> \
+  osmo-remsim bankd
+```
+
+For detailed Docker instructions, see [doc/DOCKER.md](doc/DOCKER.md).
+
 Building from Source
 --------------------
 
