@@ -70,12 +70,16 @@ RUN apt-get update && apt-get install -y \
     libmnl0 \
     pcscd \
     pcsc-tools \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy built binaries and libraries from builder
 COPY --from=builder /usr/local/bin/osmo-remsim-* /usr/local/bin/
 COPY --from=builder /usr/local/lib/libosmo* /usr/local/lib/
-COPY --from=builder /build/osmo-remsim/deps/install/lib/*.so* /usr/local/lib/
+
+# Copy dependency libraries (use shell to handle case when no files match)
+RUN --mount=from=builder,source=/build/osmo-remsim/deps/install/lib,target=/mnt/libs \
+    find /mnt/libs -name "*.so*" -exec cp {} /usr/local/lib/ \; 2>/dev/null || true
 
 # Update library cache
 RUN ldconfig

@@ -108,8 +108,20 @@ case "$1" in
         /usr/local/bin/osmo-remsim-bankd $BANKD_OPTS &
         BANKD_PID=$!
         
-        # Wait for either process to exit
-        wait -n $SERVER_PID $BANKD_PID
+        # Monitor both processes - if either exits, shutdown both
+        while true; do
+            # Check if server is still running
+            if ! kill -0 $SERVER_PID 2>/dev/null; then
+                echo "Server process exited"
+                break
+            fi
+            # Check if bankd is still running
+            if ! kill -0 $BANKD_PID 2>/dev/null; then
+                echo "Bankd process exited"
+                break
+            fi
+            sleep 1
+        done
         
         # If we get here, one of the processes died
         echo "A service has exited, shutting down..."
