@@ -1,0 +1,26 @@
+# Sample bankd_pcsc_slots.csv configuration file
+#
+# This file maps bank slot numbers to PC/SC reader names.
+# Format: bank_id,slot_nr,reader_name
+#
+# The reader names can be found using:
+#   pcsc_scan -r
+#
+# Example with Omnikey CardMan readers:
+# 1,0,OMNIKEY CardMan 3821 00 00
+# 1,1,OMNIKEY CardMan 3821 00 01
+#
+# Example with Gemalto readers:
+# 1,0,Gemalto USB Shell Token V2 00 00
+#
+# Example with Octosim (8-slot SIM bank):
+# 1,0,OctoSIM 8-Port SIM Bank 00 00
+# 1,1,OctoSIM 8-Port SIM Bank 00 01
+# 1,2,OctoSIM 8-Port SIM Bank 00 02
+# 1,3,OctoSIM 8-Port SIM Bank 00 03
+# 1,4,OctoSIM 8-Port SIM Bank 00 04
+# 1,5,OctoSIM 8-Port SIM Bank 00 05
+# 1,6,OctoSIM 8-Port SIM Bank 00 06
+# 1,7,OctoSIM 8-Port SIM Bank 00 07
+#
+# For testing, list your readers with 'pcsc_scan -r' and add them below:

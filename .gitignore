@@ -65,3 +65,6 @@ debian/files
 contrib/osmo-remsim.spec
 openwrt-sdk*
 *.tar.xz
+
+# Docker-related
+bankd_pcsc_slots.csv
