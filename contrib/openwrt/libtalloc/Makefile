@@ -51,7 +51,29 @@ CROSS = " \
 	\nChecking for HAVE_SHARED_MMAP: NO \
 	\nChecking for HAVE_MREMAP: NO \
 	\nChecking for HAVE_INCOHERENT_MMAP: (2, \"\") \
+	\nChecking for HAVE_IMMEDIATE_STRUCTURES: OK \
+	\nChecking for HAVE_MKDIR_MODE: OK \
+	\nChecking for member st_rdev in struct stat: OK \
+	\nChecking for member ss_family in struct sockaddr_storage: OK \
+	\nChecking for member __ss_family in struct sockaddr_storage: NO \
+	\nChecking for member sa_len in struct sockaddr: NO \
+	\nChecking for member sin_len in struct sockaddr_in: NO \
+	\nChecking for member sin6_len in struct sockaddr_in6: NO \
+	\nChecking for HAVE_UNIXSOCKET: OK \
 	\nChecking for HAVE_SECURE_MKSTEMP: OK \
+	\nChecking for HAVE_IFACE_GETIFADDRS: OK \
+	\nChecking for HAVE_IFACE_AIX: NO \
+	\nChecking for HAVE_IFACE_IFCONF: OK \
+	\nChecking for HAVE_IFACE_IFREQ: OK \
+	\nChecking for declaration of getpwent_r: NO \
+	\nChecking for declaration of getpwent_r (as enum): NO \
+	\nChecking for declaration of getgrent_r: NO \
+	\nChecking for declaration of getgrent_r (as enum): NO \
+	\nChecking for strerror_r: OK \
+	\nChecking for XSI (rather than GNU) prototype for strerror_r: OK \
+	\nChecking for program 'xsltproc': NO \
+	\nChecking for header sys/auxv.h: OK \
+	\nChecking for getauxval: OK \
 	\nChecking if compiler accepts -fstack-protector-strong: NO \
 	\nChecking if compiler accepts -fstack-protector: NO \
 	\nChecking if compiler accepts -fstack-clash-protection: OK \
