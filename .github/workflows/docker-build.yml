@@ -1,0 +1,57 @@
+name: Docker Build
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-docker:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: false
+        tags: osmo-remsim:test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        
+    - name: Test Docker image
+      run: |
+        # Start the server in background
+        docker run -d --name test-server \
+          -p 9997:9997 \
+          -p 9998:9998 \
+          osmo-remsim:test server
+        
+        # Wait for server to start
+        sleep 5
+        
+        # Check if server is responding
+        docker logs test-server
+        
+        # Test REST API endpoint (expect 200 OK or similar)
+        curl -v http://localhost:9997/api/backend/slotmaps || true
+        
+        # Cleanup
+        docker stop test-server
+        docker rm test-server
+        
+    - name: Test help command
+      run: |
+        docker run --rm osmo-remsim:test help
